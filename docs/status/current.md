@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: add a minimal UEFI ABI entry stub crate wired to the kernel deterministic boot banner
+- Subtask: fix CI regressions by formatting UEFI tests and adding the initial smoke-test script
 - Status: ready_for_ci
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 

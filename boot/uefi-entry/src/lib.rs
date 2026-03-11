@@ -52,7 +52,10 @@ mod tests {
 
     #[test]
     fn efi_main_returns_success_in_stub_slice() {
-        let status = efi_main(EfiHandle(core::ptr::null_mut()), EfiSystemTable(core::ptr::null_mut()));
+        let status = efi_main(
+            EfiHandle(core::ptr::null_mut()),
+            EfiSystemTable(core::ptr::null_mut()),
+        );
         assert_eq!(status, EfiStatus::SUCCESS);
     }
 }

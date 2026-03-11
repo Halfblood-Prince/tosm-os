@@ -11,7 +11,9 @@ Canonical boot banner:
 
 - `tosm-os: kernel entry reached`
 
-COM1 serial output wiring and QEMU smoke automation remain the next incremental steps.
+A temporary smoke script (`tools/smoke-test.sh`) currently enforces the deterministic boot banner contract while QEMU automation is still pending.
+
+COM1 serial output wiring and full QEMU smoke automation remain the next incremental steps.
 
 ## Codex + CI workflow
 
