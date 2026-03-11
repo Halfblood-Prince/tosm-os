@@ -89,10 +89,10 @@ fn port_read_u8(_port: u16) -> u8 {
     0
 }
 
-/// Returns the deterministic kernel message expected by boot milestone consumers.
+/// Returns the deterministic kernel banner line expected by boot milestone consumers.
 #[must_use]
-pub const fn kernel_entry_message() -> &'static [u8] {
-    kernel::boot_banner_bytes()
+pub const fn kernel_entry_message_line() -> &'static [u8] {
+    kernel::boot_banner_line_bytes()
 }
 
 /// UEFI ABI entrypoint for the boot milestone.
@@ -101,8 +101,7 @@ pub const fn kernel_entry_message() -> &'static [u8] {
 #[no_mangle]
 pub extern "efiapi" fn efi_main(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus {
     let mut serial = SerialCom1::new();
-    serial.write_all(kernel_entry_message());
-    serial.write_all(b"\r\n");
+    serial.write_all(kernel_entry_message_line());
     EfiStatus::SUCCESS
 }
 
@@ -122,11 +121,11 @@ extern crate std;
 
 #[cfg(test)]
 mod tests {
-    use super::{kernel_entry_message, EfiStatus, LINE_STATUS_TRANSMITTER_EMPTY};
+    use super::{kernel_entry_message_line, EfiStatus, LINE_STATUS_TRANSMITTER_EMPTY};
 
     #[test]
-    fn entry_message_matches_kernel_banner() {
-        assert_eq!(kernel_entry_message(), b"tosm-os: kernel entry reached");
+    fn entry_message_line_matches_kernel_banner_with_crlf() {
+        assert_eq!(kernel_entry_message_line(), b"tosm-os: kernel entry reached\r\n");
     }
 
     #[test]
