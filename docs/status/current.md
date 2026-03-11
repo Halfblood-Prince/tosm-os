@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: add a minimal COM1 serial writer in the UEFI entry path so firmware can emit the kernel banner
-- Status: ready_for_ci
+- Subtask: remove the unused COM1 line-status constant that fails clippy with `-D warnings`
+- Status: ready_for_ci (awaiting CI rerun on this fix)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria

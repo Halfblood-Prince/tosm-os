@@ -4,7 +4,6 @@
 use core::ffi::c_void;
 
 const COM1_PORT: u16 = 0x3F8;
-const LINE_STATUS_DATA_READY: u8 = 1;
 const LINE_STATUS_TRANSMITTER_EMPTY: u8 = 1 << 5;
 
 /// UEFI status code.
@@ -123,7 +122,7 @@ extern crate std;
 
 #[cfg(test)]
 mod tests {
-    use super::{kernel_entry_message, EfiStatus, LINE_STATUS_DATA_READY};
+    use super::{kernel_entry_message, EfiStatus, LINE_STATUS_TRANSMITTER_EMPTY};
 
     #[test]
     fn entry_message_matches_kernel_banner() {
@@ -136,7 +135,7 @@ mod tests {
     }
 
     #[test]
-    fn line_status_data_ready_bit_is_low_bit() {
-        assert_eq!(LINE_STATUS_DATA_READY, 1);
+    fn line_status_transmitter_empty_bit_matches_uart_lsr_spec() {
+        assert_eq!(LINE_STATUS_TRANSMITTER_EMPTY, 1 << 5);
     }
 }
