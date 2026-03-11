@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel"]
+members = ["kernel", "boot/uefi-entry"]
 resolver = "2"
 
 [workspace.package]
