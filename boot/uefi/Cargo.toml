@@ -1,0 +1,8 @@
+[package]
+name = "tosm-uefi"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kernel = { path = "../../kernel" }
+uefi = { version = "0.29", default-features = false }

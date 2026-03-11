@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "kernel",
+    "boot/uefi",
+]
+default-members = [
+    "kernel",
+]
+resolver = "2"

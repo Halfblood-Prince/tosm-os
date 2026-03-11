@@ -1,0 +1,3 @@
+build/
+boot/uefi/target/
+kernel/target/
