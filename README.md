@@ -13,6 +13,14 @@ Canonical boot banner:
 
 A temporary smoke script (`tools/smoke-test.sh`) currently enforces the deterministic boot banner contract while QEMU automation is still pending.
 
+Workspace validation commands are wired through canonical `make` targets:
+
+- `make fmt`
+- `make lint`
+- `make test`
+- `make build`
+- `make smoke`
+
 Full QEMU smoke automation remains the next incremental step.
 
 ## Codex + CI workflow
