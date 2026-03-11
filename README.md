@@ -2,6 +2,14 @@
 
 The repository currently targets the first milestone: a minimal x86_64 UEFI boot stub that writes a deterministic banner to COM1 under QEMU and then powers off.
 
+## Codex + CI workflow
+
+- Codex is expected to **write code and docs only**.
+- Verification is delegated to GitHub Actions after a feature branch is merged into `main`.
+- The `CI` workflow uploads logs and reports as artifacts.
+- The `Project status` workflow copies the latest CI outcome, report summaries, and log excerpts into `docs/status/` on `main`.
+- On the next Codex run, it should read `docs/status/current.md`, `docs/status/ci-feedback.json`, `docs/status/latest-ci.md`, and the generated reports/log excerpts before deciding whether to continue the milestone or fix a prior failure.
+
 ## Prerequisites
 
 - Rust stable with `rustfmt` and `clippy`
@@ -10,6 +18,8 @@ The repository currently targets the first milestone: a minimal x86_64 UEFI boot
 - OVMF firmware available in a standard QEMU installation path
 
 ## Verification commands
+
+These are the commands GitHub Actions is expected to run after merge:
 
 - `make fmt`
 - `make lint`
