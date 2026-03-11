@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: fix smoke CI regression by making the banner smoke check portable (remove rg dependency)
+- Subtask: add a minimal COM1 serial writer in the UEFI entry path so firmware can emit the kernel banner
 - Status: ready_for_ci
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
