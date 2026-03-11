@@ -1,7 +1,7 @@
 {
   "workflow": "CI",
-  "run_id": "22968942419",
-  "conclusion": "cancelled",
+  "run_id": "22968955454",
+  "conclusion": "failure",
   "head_branch": "main",
-  "head_sha": "7682a549e43035d8e0988eaac46a7be1e6eaa107"
+  "head_sha": "55fa9756acf73d17610e3f4f5c59dce3c285f333"
 }
