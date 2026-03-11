@@ -1,2 +1,1 @@
-./tools/smoke-test.sh: line 9: rg: command not found
-smoke: expected boot banner not found
+smoke: boot banner contract present
