@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: fix CI regressions by formatting UEFI tests and adding the initial smoke-test script
+- Subtask: fix smoke CI regression by making the banner smoke check portable (remove rg dependency)
 - Status: ready_for_ci
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
