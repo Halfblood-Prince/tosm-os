@@ -1,0 +1,42 @@
+name: Milestone task
+description: Small vertical slice for the OS
+title: "[milestone] "
+labels: ["milestone"]
+body:
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      placeholder: "bootloader and entry"
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: Smallest correct next slice
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      value: |
+        - [ ] code builds
+        - [ ] relevant tests pass
+        - [ ] docs updated
+        - [ ] CI green
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      value: |
+        - cargo fmt --all
+        - cargo clippy --all-targets --all-features -- -D warnings
+        - cargo test --all
+        - make smoke
