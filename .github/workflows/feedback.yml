@@ -1,0 +1,93 @@
+name: Feedback
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  feedback:
+    if: ${{ github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository at default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Determine result
+        id: result
+        run: |
+          echo "conclusion=${{ github.event.workflow_run.conclusion }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build machine-readable status
+        run: |
+          mkdir -p docs/status
+          cat > docs/status/ci-feedback.json <<EOF
+          {
+            "workflow": "CI",
+            "run_id": "${{ github.event.workflow_run.id }}",
+            "conclusion": "${{ github.event.workflow_run.conclusion }}",
+            "head_branch": "${{ github.event.workflow_run.head_branch }}",
+            "head_sha": "${{ github.event.workflow_run.head_sha }}"
+          }
+          EOF
+
+      - name: Commit status file
+        if: ${{ github.event.workflow_run.head_branch == github.event.repository.default_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/status/ci-feedback.json
+          git diff --cached --quiet || git commit -m "ci: update feedback status"
+          git push || true
+
+      - name: Find PR for workflow run
+        id: prs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prs = context.payload.workflow_run.pull_requests || [];
+            core.setOutput("count", String(prs.length));
+            core.setOutput("number", prs.length ? String(prs[0].number) : "");
+
+      - name: Comment on PR
+        if: ${{ steps.prs.outputs.count != '0' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = Number("${{ steps.prs.outputs.number }}");
+            const conclusion = "${{ steps.result.outputs.conclusion }}";
+
+            const body =
+              conclusion === "success"
+                ? [
+                    "✅ CI passed.",
+                    "",
+                    "**Closed-loop feedback for Codex**",
+                    "- This task is verified by CI.",
+                    "- Update `docs/status/current.md` and mark only the completed milestone items.",
+                    "- Move to the next unfinished milestone.",
+                  ].join("\n")
+                : [
+                    "❌ CI failed.",
+                    "",
+                    "**Closed-loop feedback for Codex**",
+                    "- Do not mark the milestone complete.",
+                    "- Read the failing job logs and artifacts.",
+                    "- Fix the smallest root cause and rerun CI.",
+                  ].join("\n");
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body,
+            });
