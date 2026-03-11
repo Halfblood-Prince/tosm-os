@@ -6,7 +6,7 @@ set -euo pipefail
 # until the QEMU boot path is added in a later slice.
 expected_banner='tosm-os: kernel entry reached'
 
-if ! rg --fixed-strings --quiet "${expected_banner}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+if ! grep --fixed-strings --quiet -- "${expected_banner}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
   echo "smoke: expected boot banner not found"
   exit 1
 fi

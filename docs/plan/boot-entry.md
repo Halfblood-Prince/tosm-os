@@ -32,7 +32,7 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 1. ✅ Create Cargo workspace and minimal host-testable `kernel` crate.
 2. 🟡 Implement UEFI entry stub crate that calls into kernel banner bytes.
 3. ⏳ Add panic handler and COM1 serial writer in the UEFI entry crate.
-4. 🟡 Add initial smoke-test script for banner contract; extend to QEMU runner in a later slice.
+4. ✅ Add initial smoke-test script for banner contract; keep it CI-portable with POSIX tooling and extend to QEMU runner in a later slice.
 5. ⏳ Wire scripts into `make` targets.
 6. ⏳ Update README and status docs for each slice.
 
