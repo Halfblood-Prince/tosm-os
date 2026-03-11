@@ -8,6 +8,7 @@ Provide the first bootable x86_64 slice for `tosm-os`: a UEFI entry stub that em
 
 - `kernel::boot_banner()`: stable banner string shared between tests and the boot path.
 - `SerialPort`: minimal COM1 UART writer used by the UEFI stub and panic path.
+- `EfiSystemTable` / `EfiRuntimeServices`: minimal `repr(C)` ABI structs for firmware shutdown without external dependencies.
 
 ## Invariants
 
@@ -24,5 +25,6 @@ Provide the first bootable x86_64 slice for `tosm-os`: a UEFI entry stub that em
 ## Testing approach
 
 - Unit test the shared boot banner in the `kernel` crate.
-- Build the UEFI boot stub for `x86_64-unknown-uefi`.
+- Build the UEFI boot stub for `x86_64-unknown-uefi` using the in-repo ABI definitions.
+- Run smoke through host-native scripts selected by `make` (PowerShell or POSIX shell).
 - Boot QEMU under OVMF and assert the serial log line.
