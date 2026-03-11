@@ -1,0 +1,30 @@
+{
+  "workflow": "CI",
+  "run_id": "unknown",
+  "run_attempt": "unknown",
+  "conclusion": "unknown",
+  "head_branch": "main",
+  "head_sha": "unknown",
+  "event": "unknown",
+  "run_url": "",
+  "updated_at": "pending-first-post-merge-run",
+  "job_results": {
+    "format": "unknown",
+    "clippy": "unknown",
+    "tests": "unknown",
+    "build": "unknown",
+    "smoke": "unknown"
+  },
+  "codex_next_action": "read the generated CI files after the first post-merge automation run",
+  "reports": {
+    "rust_checks": "docs/status/reports/rust-checks.md",
+    "boot_smoke": "docs/status/reports/boot-smoke.md"
+  },
+  "log_excerpts": {
+    "fmt": "docs/status/logs/fmt.log",
+    "clippy": "docs/status/logs/clippy.log",
+    "tests": "docs/status/logs/test.log",
+    "build": "docs/status/logs/build.log",
+    "smoke": "docs/status/logs/smoke.log"
+  }
+}
