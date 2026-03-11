@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: wire workspace checks and smoke script into canonical `make` targets
-- Status: ready_for_ci (awaiting CI run on make-target wiring)
+- Subtask: centralize canonical boot banner line (with CRLF) in kernel for UEFI serial output reuse
+- Status: ready_for_ci (awaiting CI run on canonical banner-line centralization)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria

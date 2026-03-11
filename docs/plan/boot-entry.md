@@ -24,6 +24,7 @@ Build the milestone incrementally:
 - add a separate UEFI entry crate that consumes this banner
 - extend that crate to write the banner to COM1
 - only then add QEMU smoke automation tied to the expected serial output
+- centralize the canonical CRLF-terminated banner line in the kernel crate so firmware entry paths cannot drift
 
 This keeps early milestone slices auditable and minimizes cross-cutting risk.
 
@@ -35,6 +36,7 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 4. ✅ Add initial smoke-test script for banner contract; keep it CI-portable with POSIX tooling and extend to QEMU runner in a later slice.
 5. ✅ Wire scripts into `make` targets.
 6. ✅ Update README and status docs for each slice.
+7. ✅ Centralize the CRLF-terminated banner line in `kernel` and consume it from `boot/uefi-entry`.
 
 ## Risks
 
