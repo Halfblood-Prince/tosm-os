@@ -3,22 +3,65 @@
 #![forbid(unsafe_op_in_unsafe_fn)]
 
 use core::arch::asm;
+use core::ffi::c_void;
 use core::fmt::{self, Write};
 
 use kernel::boot_banner;
-use uefi::prelude::*;
-use uefi::{Handle, Status};
 
 const COM1_PORT: u16 = 0x3F8;
+const EFI_SUCCESS: usize = 0;
+const EFI_RESET_SHUTDOWN: usize = 2;
 
-#[entry]
-fn main(_image_handle: Handle, system_table: SystemTable<Boot>) -> Status {
+#[repr(C)]
+struct EfiTableHeader {
+    signature: u64,
+    revision: u32,
+    header_size: u32,
+    crc32: u32,
+    reserved: u32,
+}
+
+#[repr(C)]
+struct EfiRuntimeServices {
+    header: EfiTableHeader,
+    _reserved_time_services: [usize; 13],
+    reset_system: unsafe extern "efiapi" fn(
+        reset_type: usize,
+        status: usize,
+        data_size: usize,
+        reset_data: *const u16,
+    ) -> !,
+}
+
+#[repr(C)]
+struct EfiSystemTable {
+    header: EfiTableHeader,
+    _firmware_vendor: *const u16,
+    _firmware_revision: u32,
+    _console_in_handle: *mut c_void,
+    _con_in: *mut c_void,
+    _console_out_handle: *mut c_void,
+    _con_out: *mut c_void,
+    _standard_error_handle: *mut c_void,
+    _std_err: *mut c_void,
+    _runtime_services: *mut EfiRuntimeServices,
+}
+
+#[unsafe(no_mangle)]
+extern "efiapi" fn efi_main(
+    _image_handle: *mut c_void,
+    system_table: *mut EfiSystemTable,
+) -> usize {
     let mut serial = SerialPort::new(COM1_PORT);
     serial.init();
     serial.write_line(boot_banner());
-    system_table
-        .runtime_services()
-        .reset(uefi::runtime::ResetType::SHUTDOWN, Status::SUCCESS, None);
+
+    // Safety: UEFI passes a valid system table pointer to the firmware entrypoint.
+    let runtime_services = unsafe { (*system_table)._runtime_services };
+    // Safety: `reset_system` is provided by firmware and does not return.
+    unsafe {
+        ((*runtime_services).reset_system)(EFI_RESET_SHUTDOWN, EFI_SUCCESS, 0, core::ptr::null())
+    }
 }
 
 #[panic_handler]

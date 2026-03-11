@@ -3,11 +3,11 @@
 - Active milestone: bootloader and entry
 - Subtask: kernel entry stub boots in QEMU and writes to serial
 - Status: in_progress
-- Note: implementation is in progress; required local verification is currently blocked until `make`, `cargo`, and `qemu-system-x86_64` are available in the environment.
+- Note: `make` now runs host checks by default and skips UEFI-targeted verification with explicit warnings when `x86_64-unknown-uefi`, QEMU, or OVMF prerequisites are unavailable.
 
 ## Done criteria
-- [ ] cargo fmt --all
+- [x] cargo fmt --all
 - [ ] cargo clippy --all-targets --all-features -- -D warnings
-- [ ] cargo test --all
+- [x] cargo test --all
 - [ ] boot smoke test in QEMU
-- [ ] docs updated
+- [x] docs updated
