@@ -21,7 +21,8 @@ Create the smallest bootable x86_64 Rust OS slice that can start in QEMU and emi
 Build the milestone incrementally:
 
 - start with a tiny no_std `kernel` crate that defines the canonical boot banner
-- add a separate UEFI entry crate next that consumes this banner and writes to COM1
+- add a separate UEFI entry crate that consumes this banner
+- extend that crate to write the banner to COM1
 - only then add QEMU smoke automation tied to the expected serial output
 
 This keeps early milestone slices auditable and minimizes cross-cutting risk.
@@ -29,10 +30,11 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 ## Implementation steps
 
 1. ✅ Create Cargo workspace and minimal host-testable `kernel` crate.
-2. ⏳ Implement UEFI entry stub, panic handler, and COM1 serial writer.
-3. ⏳ Add QEMU runner and smoke-test scripts.
-4. ⏳ Wire scripts into `make` targets.
-5. ⏳ Update README and status docs for each slice.
+2. 🟡 Implement UEFI entry stub crate that calls into kernel banner bytes.
+3. ⏳ Add panic handler and COM1 serial writer in the UEFI entry crate.
+4. ⏳ Add QEMU runner and smoke-test scripts.
+5. ⏳ Wire scripts into `make` targets.
+6. ⏳ Update README and status docs for each slice.
 
 ## Risks
 

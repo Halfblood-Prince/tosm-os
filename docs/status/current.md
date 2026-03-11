@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: kernel crate defines deterministic boot banner for upcoming UEFI entry wiring
+- Subtask: add a minimal UEFI ABI entry stub crate wired to the kernel deterministic boot banner
 - Status: ready_for_ci
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 

@@ -2,12 +2,16 @@
 
 The repository is progressing through the first milestone (`bootloader and entry`).
 
-This slice introduces a minimal Rust workspace with a host-testable `kernel` crate that owns
-an explicit, deterministic boot banner literal:
+This slice introduces a minimal Rust workspace with:
+
+- a host-testable `kernel` crate that owns an explicit deterministic boot banner literal
+- a `boot/uefi-entry` crate that defines a UEFI ABI `efi_main` stub and consumes the kernel banner bytes
+
+Canonical boot banner:
 
 - `tosm-os: kernel entry reached`
 
-The UEFI entry crate and QEMU smoke wiring remain the next incremental steps.
+COM1 serial output wiring and QEMU smoke automation remain the next incremental steps.
 
 ## Codex + CI workflow
 
