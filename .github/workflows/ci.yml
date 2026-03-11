@@ -1,0 +1,197 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-checks:
+    name: Rust checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Prepare report directories
+        run: |
+          mkdir -p reports logs
+
+      - name: Format check
+        id: fmt
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo fmt --all --check 2>&1 | tee logs/fmt.log
+
+      - name: Clippy
+        id: clippy
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo clippy --all-targets --all-features -- -D warnings 2>&1 | tee logs/clippy.log
+
+      - name: Tests
+        id: test
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --all --verbose 2>&1 | tee logs/test.log
+
+      - name: Build
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo build --workspace --verbose 2>&1 | tee logs/build.log
+
+      - name: Write rust report
+        if: always()
+        run: |
+          cat > reports/rust-checks.md <<'EOF'
+          # Rust checks report
+
+          - Format: ${{ steps.fmt.outcome }}
+          - Clippy: ${{ steps.clippy.outcome }}
+          - Tests: ${{ steps.test.outcome }}
+          - Build: ${{ steps.build.outcome }}
+          EOF
+
+      - name: Upload rust logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-checks-${{ github.run_id }}
+          path: |
+            logs/fmt.log
+            logs/clippy.log
+            logs/test.log
+            logs/build.log
+            reports/rust-checks.md
+          if-no-files-found: error
+          retention-days: 14
+
+  boot-smoke:
+    name: Boot smoke
+    runs-on: ubuntu-latest
+    needs: rust-checks
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install QEMU + OVMF
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 ovmf
+
+      - name: Prepare report directories
+        run: |
+          mkdir -p reports logs
+
+      - name: Run smoke test
+        id: smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          chmod +x ./tools/smoke-test.sh
+          ./tools/smoke-test.sh 2>&1 | tee logs/smoke.log
+
+      - name: Write smoke report
+        if: always()
+        run: |
+          cat > reports/boot-smoke.md <<'EOF'
+          # Boot smoke report
+
+          - Smoke test: ${{ steps.smoke.outcome }}
+          EOF
+
+      - name: Upload smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-smoke-${{ github.run_id }}
+          path: |
+            logs/smoke.log
+            reports/boot-smoke.md
+          if-no-files-found: error
+          retention-days: 14
+
+  report:
+    name: CI report
+    runs-on: ubuntu-latest
+    needs: [rust-checks, boot-smoke]
+    if: always()
+
+    steps:
+      - name: Write workflow summary
+        run: |
+          {
+            echo "## CI report"
+            echo
+            echo "- rust-checks: ${{ needs.rust-checks.result }}"
+            echo "- boot-smoke: ${{ needs.boot-smoke.result }}"
+            echo "- run id: ${{ github.run_id }}"
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- ref: \`${{ github.ref }}\`"
+            echo
+            echo "### Artifacts"
+            echo "- rust-checks-${{ github.run_id }}"
+            echo "- boot-smoke-${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create GitHub issue on failure
+        if: ${{ needs.rust-checks.result != 'success' || needs.boot-smoke.result != 'success' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `CI failure: run ${context.runId}`;
+            const body = [
+              'A CI workflow failed.',
+              '',
+              `- Workflow: ${context.workflow}`,
+              `- Run ID: ${context.runId}`,
+              `- Ref: ${context.ref}`,
+              `- SHA: ${context.sha}`,
+              `- rust-checks: ${{ needs.rust-checks.result }}`,
+              `- boot-smoke: ${{ needs.boot-smoke.result }}`,
+              '',
+              `Open the workflow run for logs and downloaded artifacts: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            ].join('\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['ci-failure']
+            });
+
+      - name: Fail workflow if any job failed
+        run: |
+          test "${{ needs.rust-checks.result }}" = "success"
+          test "${{ needs.boot-smoke.result }}" = "success"
