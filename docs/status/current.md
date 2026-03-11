@@ -1,9 +1,9 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: kernel entry stub boots in QEMU and writes to serial
-- Status: awaiting_ci_feedback
-- Note: Codex should write code/docs only, then rely on GitHub Actions after merge to `main`. Read the latest CI automation section below before starting the next slice.
+- Subtask: kernel crate defines deterministic boot banner for upcoming UEFI entry wiring
+- Status: ready_for_ci
+- Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
 - [ ] cargo fmt --all

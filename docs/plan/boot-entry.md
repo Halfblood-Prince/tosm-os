@@ -4,45 +4,45 @@ Create the smallest bootable x86_64 Rust OS slice that can start in QEMU and emi
 
 ## Current state
 
-- Repository contains a Cargo workspace with `kernel` and `boot/uefi` crates.
+- Repository now contains a Cargo workspace with a minimal `kernel` crate.
+- The `kernel` crate exports a deterministic boot banner literal and byte-slice helper for future firmware serial output wiring.
 - Active milestone is `bootloader and entry`.
-- Active subtask is `kernel entry stub boots in QEMU and writes to serial`.
 
 ## Constraints
 
-- Keep the change buildable and testable.
+- Keep each change buildable and reviewable.
 - Stay on the active milestone only.
 - Prefer the smallest correct slice over broader subsystem work.
 - Update docs when behavior changes.
-- Verification must run through `make fmt`, `make lint`, `make test`, `make build`, and `make smoke`.
+- Verification is delegated to GitHub Actions after merge.
 
 ## Design choice
 
-Use a minimal Cargo workspace with:
+Build the milestone incrementally:
 
-- a host-testable `kernel` crate that owns the deterministic banner literal
-- a `boot/uefi` no_std firmware entry that performs serial output and shutdown via raw UEFI ABI structures
-- no external crates in the boot path to keep offline builds and auditing simpler
-- dual smoke/QEMU scripts (PowerShell and POSIX shell) selected by `make`
+- start with a tiny no_std `kernel` crate that defines the canonical boot banner
+- add a separate UEFI entry crate next that consumes this banner and writes to COM1
+- only then add QEMU smoke automation tied to the expected serial output
 
-This keeps the first milestone narrow while leaving a clean path for later interrupt and memory work.
+This keeps early milestone slices auditable and minimizes cross-cutting risk.
 
 ## Implementation steps
 
-1. Keep the workspace and kernel crate minimal and deterministic.
-2. Implement the UEFI entry stub, panic handler, and COM1 serial writer.
-3. Add QEMU runner and smoke-test scripts for both PowerShell and POSIX shells.
-4. Wire scripts into the existing `Makefile` with automatic host-shell selection.
-5. Update README and status docs for the current workflow and blockers.
-6. Run required verification and fix the smallest root cause if anything fails.
+1. ✅ Create Cargo workspace and minimal host-testable `kernel` crate.
+2. ⏳ Implement UEFI entry stub, panic handler, and COM1 serial writer.
+3. ⏳ Add QEMU runner and smoke-test scripts.
+4. ⏳ Wire scripts into `make` targets.
+5. ⏳ Update README and status docs for each slice.
 
 ## Risks
 
-- Missing `x86_64-unknown-uefi` target blocks UEFI build/lint/smoke steps.
-- Missing QEMU or OVMF firmware blocks runtime smoke tests.
-- Manual UEFI ABI definitions are sensitive to layout mistakes and require strict `repr(C)` correctness.
+- Missing `x86_64-unknown-uefi` target can block UEFI build/lint/smoke steps later.
+- Missing QEMU/OVMF can block runtime smoke checks later.
+- Hand-written ABI structs in the UEFI slice need careful layout validation.
 
 ## Verification steps
+
+Expected GitHub Actions verification after merge:
 
 - `make fmt`
 - `make lint`
