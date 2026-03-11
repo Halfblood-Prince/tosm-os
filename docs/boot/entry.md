@@ -27,4 +27,4 @@ Provide the first bootable x86_64 slice for `tosm-os`: a UEFI entry stub that em
 - Unit test the shared boot banner in the `kernel` crate.
 - Build the UEFI boot stub for `x86_64-unknown-uefi` using the in-repo ABI definitions.
 - Run smoke through host-native scripts selected by `make` (PowerShell or POSIX shell).
-- Boot QEMU under OVMF and assert the serial log line when runtime prerequisites are available.
+- Boot QEMU under OVMF and assert the serial log line.

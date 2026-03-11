@@ -24,7 +24,6 @@ Use a minimal Cargo workspace with:
 - a `boot/uefi` no_std firmware entry that performs serial output and shutdown via raw UEFI ABI structures
 - no external crates in the boot path to keep offline builds and auditing simpler
 - dual smoke/QEMU scripts (PowerShell and POSIX shell) selected by `make`
-- preflight gating so required `make` commands stay deterministic in constrained environments while reporting skipped UEFI checks
 
 This keeps the first milestone narrow while leaving a clean path for later interrupt and memory work.
 
@@ -34,9 +33,8 @@ This keeps the first milestone narrow while leaving a clean path for later inter
 2. Implement the UEFI entry stub, panic handler, and COM1 serial writer.
 3. Add QEMU runner and smoke-test scripts for both PowerShell and POSIX shells.
 4. Wire scripts into the existing `Makefile` with automatic host-shell selection.
-5. Add prerequisite checks that gate UEFI-specific verification with explicit skip warnings.
-6. Update README and status docs for the current workflow and blockers.
-7. Run required verification and fix the smallest root cause if anything fails.
+5. Update README and status docs for the current workflow and blockers.
+6. Run required verification and fix the smallest root cause if anything fails.
 
 ## Risks
 
