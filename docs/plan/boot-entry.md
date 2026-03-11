@@ -33,8 +33,8 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 2. ✅ Implement UEFI entry crate that calls into kernel banner bytes.
 3. ✅ Add a panic handler and COM1 serial writer in the UEFI entry crate.
 4. ✅ Add initial smoke-test script for banner contract; keep it CI-portable with POSIX tooling and extend to QEMU runner in a later slice.
-5. ⏳ Wire scripts into `make` targets.
-6. ⏳ Update README and status docs for each slice.
+5. ✅ Wire scripts into `make` targets.
+6. ✅ Update README and status docs for each slice.
 
 ## Risks
 

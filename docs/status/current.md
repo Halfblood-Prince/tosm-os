@@ -1,15 +1,16 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: remove the unused COM1 line-status constant that fails clippy with `-D warnings`
-- Status: ready_for_ci (awaiting CI rerun on this fix)
+- Subtask: wire workspace checks and smoke script into canonical `make` targets
+- Status: ready_for_ci (awaiting CI run on make-target wiring)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
-- [ ] cargo fmt --all
-- [ ] cargo clippy --all-targets --all-features -- -D warnings
-- [ ] cargo test --all
-- [ ] boot smoke test in QEMU
+- [ ] make fmt
+- [ ] make lint
+- [ ] make test
+- [ ] make build
+- [ ] make smoke
 - [x] docs updated
 
 <!-- ci-status:start -->
