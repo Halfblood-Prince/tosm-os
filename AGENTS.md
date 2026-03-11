@@ -65,6 +65,25 @@ Default architecture decisions:
 
 Avoid introducing a microkernel, capability system, custom VM model, or exotic scheduler unless there is a written design note justifying it.
 
+## Codex operating contract
+
+Codex writes code and docs only.
+Codex must **not** treat local execution as verification and must **not** claim validation was completed unless the generated GitHub status files say so.
+
+Before making changes, always read these files in order:
+1. `docs/status/current.md`
+2. `docs/status/ci-feedback.json`
+3. `docs/status/latest-ci.md`
+4. `docs/status/reports/*.md`
+5. `docs/status/logs/*.log`
+
+Decision rules:
+- If the latest CI conclusion is not `success`, fix the smallest concrete failure shown in the stored reports/log excerpts before starting new feature work.
+- If the latest CI conclusion is `success`, continue the next unfinished milestone slice.
+- Never mark checks as passed based on local assumptions.
+- Never delete generated status evidence just to make the repo look clean.
+- After writing code, update the relevant plan/status docs, then stop. Verification is delegated to GitHub Actions after merge to `main`.
+
 ## Delivery strategy
 
 Always work in small vertical slices.
@@ -108,6 +127,8 @@ For any task estimated above ~200 lines changed, or any cross-cutting change:
 3. Then implement in small commits or logically separated patches
 
 Do not perform broad refactors without a plan.
+
+Verification steps in plan docs are the commands GitHub Actions is expected to run after merge. Codex may reference them, but should not claim they were run locally unless a human explicitly provides the results.
 
 ## Repository structure
 
@@ -218,165 +239,3 @@ Default rules:
 When adding a dependency:
 - explain why the stdlib or existing code is insufficient
 - note no_std compatibility
-- note maintenance and security implications
-- pin or constrain versions appropriately
-
-## Documentation rules
-
-Every substantive subsystem must have a short design note in `docs/`.
-
-Required when introducing a subsystem:
-- purpose
-- key data structures
-- invariants
-- failure modes
-- testing approach
-
-Update docs when code behavior changes.
-Do not leave docs knowingly stale.
-
-## Testing and verification
-
-Every change should include the best available verification.
-
-Use as many of these as apply:
-- `cargo fmt`
-- `cargo clippy -- -D warnings`
-- unit tests
-- integration tests
-- boot test in QEMU
-- screenshot/log assertion tests where practical
-- image build verification
-- basic smoke tests for boot and shell flow
-
-If a task cannot be fully tested automatically:
-- state what was verified
-- state what remains unverified
-- add a focused TODO in docs or tests, not a vague note
-
-Do not claim something works unless it was verified.
-
-## Build and run expectations
-
-If the repo already defines commands, use them.
-Otherwise prefer creating consistent commands such as:
-
-- `cargo fmt --all`
-- `cargo clippy --all-targets --all-features -- -D warnings`
-- `cargo test --all`
-- `make run`
-- `make qemu`
-- `make image`
-- `make test-integration`
-
-When adding a new command, document it in `README.md`.
-
-## Change discipline
-
-Prefer narrow, reviewable changes.
-
-For each task:
-- inspect existing code first
-- preserve style and naming consistency
-- avoid unrelated cleanup
-- avoid renaming files/symbols unless needed
-- keep public interfaces small
-- update docs/tests in the same change
-
-If you discover a larger issue while implementing:
-- note it
-- finish the scoped task first unless blocked
-- then propose a follow-up
-
-## Commit / PR expectations
-
-When preparing a change, include:
-- what changed
-- why
-- risks
-- how it was verified
-- follow-up work
-
-Good change summaries mention:
-- subsystem touched
-- design choice made
-- safety impact
-- test evidence
-
-## Behavior rules for Codex
-
-Before editing:
-1. read `README.md`
-2. read this file
-3. inspect relevant code paths
-4. inspect any docs for the subsystem
-5. summarize the intended change briefly in your reasoning
-
-When implementing:
-- make the minimal coherent change
-- create missing docs/tests as needed
-- keep TODOs specific and actionable
-- prefer completing one subsystem slice over scattering partial work
-
-After implementing:
-1. run formatting
-2. run linting
-3. run tests relevant to the change
-4. report exact results
-5. mention anything not verified
-
-Never fabricate:
-- benchmark results
-- test results
-- boot success
-- hardware compatibility
-- security guarantees
-
-## First milestones if repo is empty
-
-If the repository is mostly empty, build in this order:
-
-Phase 1:
-- workspace layout
-- target configuration
-- bootable kernel entry
-- serial logging
-- QEMU boot instructions
-- basic CI for fmt/clippy/build
-
-Phase 2:
-- interrupt descriptor setup
-- panic handling
-- physical frame allocator
-- paging primitives
-- heap allocator
-
-Phase 3:
-- timer interrupts
-- cooperative or simple preemptive scheduler
-- kernel threads
-- syscall boundary
-- minimal user mode entry
-
-Phase 4:
-- ELF loader
-- simple userspace init
-- ramfs or simple filesystem
-- shell with a tiny command set
-
-Do not skip to GUI or advanced drivers before these phases exist.
-
-## Definition of done
-
-A task is done only when:
-- code is committed cleanly
-- it builds
-- relevant tests pass, or missing verification is explicitly stated
-- docs are updated
-- no known broken partial scaffolding is left behind without explanation
-
-## Style
-
-Write code for maintainers.
-Be explicit, boring, and correct.
-Favor small interfaces, clear invariants, and incremental progress.
