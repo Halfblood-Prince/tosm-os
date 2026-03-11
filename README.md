@@ -5,7 +5,7 @@ The repository is progressing through the first milestone (`bootloader and entry
 This slice introduces a minimal Rust workspace with:
 
 - a host-testable `kernel` crate that owns an explicit deterministic boot banner literal
-- a `boot/uefi-entry` crate that defines a UEFI ABI `efi_main` stub and consumes the kernel banner bytes
+- a `boot/uefi-entry` crate that defines a UEFI ABI `efi_main`, writes the kernel banner to COM1, and includes a minimal panic handler
 
 Canonical boot banner:
 
@@ -13,7 +13,7 @@ Canonical boot banner:
 
 A temporary smoke script (`tools/smoke-test.sh`) currently enforces the deterministic boot banner contract while QEMU automation is still pending.
 
-COM1 serial output wiring and full QEMU smoke automation remain the next incremental steps.
+Full QEMU smoke automation remains the next incremental step.
 
 ## Codex + CI workflow
 
