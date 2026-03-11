@@ -15,9 +15,9 @@
 <!-- ci-status:start -->
 ## Latest CI automation
 
-- Last CI conclusion: unknown
-- Last CI run: `unknown`
-- Last tested commit: `unknown`
-- Recommended next action for Codex: read the generated CI files after the first post-merge automation run
+- Last CI conclusion: cancelled
+- Last CI run: `22973077663`
+- Last tested commit: `55560fd47231e88604fd43b2508c9250560c5087`
+- Recommended next action for Codex: fix the smallest concrete failure from the latest CI excerpts before adding new scope
 - Detailed summary: `docs/status/latest-ci.md`
 <!-- ci-status:end -->

@@ -1,3 +1,3 @@
-# boot-smoke.md
+# Boot smoke report
 
-Waiting for the first post-merge CI run.
+- Smoke test: failure

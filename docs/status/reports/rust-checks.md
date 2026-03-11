@@ -1,3 +1,6 @@
-# rust-checks.md
+# Rust checks report
 
-Waiting for the first post-merge CI run.
+- Format: success
+- Clippy: success
+- Tests: success
+- Build: success

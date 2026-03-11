@@ -1,21 +1,21 @@
 {
   "workflow": "CI",
-  "run_id": "unknown",
-  "run_attempt": "unknown",
-  "conclusion": "unknown",
+  "run_id": "22973077663",
+  "run_attempt": "1",
+  "conclusion": "cancelled",
   "head_branch": "main",
-  "head_sha": "unknown",
-  "event": "unknown",
-  "run_url": "",
-  "updated_at": "pending-first-post-merge-run",
+  "head_sha": "55560fd47231e88604fd43b2508c9250560c5087",
+  "event": "push",
+  "run_url": "https://github.com/Halfblood-Prince/tosm-os/actions/runs/22973077663",
+  "updated_at": "2026-03-11T20:32:38Z",
   "job_results": {
-    "format": "unknown",
-    "clippy": "unknown",
-    "tests": "unknown",
-    "build": "unknown",
-    "smoke": "unknown"
+    "format": "success",
+    "clippy": "success",
+    "tests": "success",
+    "build": "success",
+    "smoke": "failure"
   },
-  "codex_next_action": "read the generated CI files after the first post-merge automation run",
+  "codex_next_action": "fix the smallest concrete failure from the latest CI excerpts before adding new scope",
   "reports": {
     "rust_checks": "docs/status/reports/rust-checks.md",
     "boot_smoke": "docs/status/reports/boot-smoke.md"

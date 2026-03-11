@@ -1,1 +1,2 @@
-waiting for the first post-merge CI run
+[1m[92m    Checking[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
