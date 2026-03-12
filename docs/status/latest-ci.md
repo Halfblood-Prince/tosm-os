@@ -3,12 +3,12 @@
 - Workflow: CI
 - Conclusion: failure
 - Branch: main
-- Commit: `d8835a5a2e59d544599ab849d7a2c5b917cea547`
-- Run ID: 23000034992
+- Commit: `8253c809a4688d6e078e5d9368861ccbe7a1141a`
+- Run ID: 23000801057
 - Run attempt: 1
 - Event: push
-- Updated at: 2026-03-12T11:37:50Z
-- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23000034992
+- Updated at: 2026-03-12T11:59:20Z
+- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23000801057
 
 ## Job results
 
@@ -41,9 +41,6 @@ Recommended next action: **fix the smallest concrete failure from the latest CI 
 - `tests`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustdoc --edition=2021 --crate-type lib --color always --crate-name uefi_entry --test boot/uefi-entry/src/lib.rs --test-run-directory /home/runner/work/tosm-os/tosm-os/boot/uefi-entry --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps -C embed-bitcode=no --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' --error-format human`
 - `tests`: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `build`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name bootx64 --edition=2021 boot/uefi-entry/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=6b5032e417c7913e -C extra-filename=-cf7c0a985f3d483b --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib`
-- `smoke`: [1m[91merror[0m[1m: linking with `rust-lld` failed: exit status: 1[0m
-- `smoke`: [1m[94m= [0m[1mnote[0m: rust-lld: error: duplicate symbol: efi_main
-- `smoke`: [1m[91merror[0m: could not compile `uefi-entry` (bin "bootx64") due to 1 previous error
 
 ## Stored reports
 
