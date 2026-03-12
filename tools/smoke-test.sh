@@ -20,6 +20,8 @@ expected_timer_third_tick='tosm-os: timer tick irq=0x20 count=3 uptime_ns=300000
 expected_timer_ack='tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20'
 expected_timer_handoff='tosm-os: timer handoff ticks=3 delta=3 quantum=1 uptime_ns=30000000'
 expected_scheduler_handoff='tosm-os: scheduler handoff reason=timer runq=2 selected=1 idle=0 delta=3'
+expected_thread_enqueue='tosm-os: thread enqueue task=2 runq=3 selected=1'
+expected_thread_dequeue='tosm-os: thread dequeue task=2 runq=2 selected=1'
 expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
 expected_interrupt_init_line='tosm-os: idt skeleton initialized\r\n'
@@ -37,6 +39,8 @@ expected_timer_third_tick_line='tosm-os: timer tick irq=0x20 count=3 uptime_ns=3
 expected_timer_ack_line='tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20\r\n'
 expected_timer_handoff_line='tosm-os: timer handoff ticks=3 delta=3 quantum=1 uptime_ns=30000000\r\n'
 expected_scheduler_handoff_line='tosm-os: scheduler handoff reason=timer runq=2 selected=1 idle=0 delta=3\r\n'
+expected_thread_enqueue_line='tosm-os: thread enqueue task=2 runq=3 selected=1\r\n'
+expected_thread_dequeue_line='tosm-os: thread dequeue task=2 runq=2 selected=1\r\n'
 expected_exception_page_fault_line='tosm-os: exception vector 14 page fault\r\n'
 
 contract_check() {
@@ -117,6 +121,16 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_scheduler_handoff}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected scheduler-handoff line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_enqueue}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected thread-enqueue line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_dequeue}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected thread-dequeue line not found"
     exit 1
   fi
 
@@ -215,6 +229,16 @@ contract_check() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_thread_enqueue_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected thread-enqueue CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_dequeue_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected thread-dequeue CRLF contract not found"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected efi_main completion CRLF contract not found"
     exit 1
@@ -274,7 +298,17 @@ screen_transcript_contract_check() {
     exit 1
   fi
 
-  echo "smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/memory-reporting/paging-plan-reporting/timer-reporting/scrolling contracts present"
+  if ! grep --fixed-strings --quiet -- "tosm-os: thread enqueue task=2 runq=3 selected=1" boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected VGA transcript row for thread enqueue line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "tosm-os: thread dequeue task=2 runq=2 selected=1" boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected VGA transcript row for thread dequeue line not found"
+    exit 1
+  fi
+
+  echo "smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/memory-reporting/paging-plan-reporting/timer-reporting/scheduler-thread-reporting/scrolling contracts present"
 }
 
 find_ovmf_code() {
@@ -483,6 +517,16 @@ run_qemu_smoke() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_thread_enqueue}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing thread-enqueue line"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_dequeue}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing thread-dequeue line"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing completion line"
     exit 1
@@ -497,7 +541,7 @@ run_qemu_smoke() {
     return 2
   fi
 
-  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, timer-init, timer-first-tick, timer-third-tick, timer-ack, timer-handoff, scheduler-handoff, and completion lines"
+  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, timer-init, timer-first-tick, timer-third-tick, timer-ack, timer-handoff, scheduler-handoff, thread-enqueue, thread-dequeue, and completion lines"
 }
 
 contract_check

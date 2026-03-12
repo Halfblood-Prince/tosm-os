@@ -333,6 +333,18 @@ pub const fn scheduler_handoff_message_line() -> &'static [u8] {
     kernel::boot_scheduler_handoff_line_bytes()
 }
 
+/// Returns the deterministic thread-enqueue line expected for first scheduler slot mutation contracts.
+#[must_use]
+pub const fn thread_enqueue_message_line() -> &'static [u8] {
+    kernel::boot_thread_enqueue_line_bytes()
+}
+
+/// Returns the deterministic thread-dequeue line expected for first scheduler slot mutation contracts.
+#[must_use]
+pub const fn thread_dequeue_message_line() -> &'static [u8] {
+    kernel::boot_thread_dequeue_line_bytes()
+}
+
 /// Returns the deterministic exception line expected from early dispatch logging.
 #[must_use]
 pub fn exception_message_line(vector: u8) -> &'static [u8] {
@@ -421,6 +433,19 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
     serial.write_all(scheduler_handoff_message_line());
     screen.write_all(scheduler_handoff_message_line());
 
+    if kernel::enqueue_early_scheduler_task(2).is_ok() {
+        serial.write_all(thread_enqueue_message_line());
+        screen.write_all(thread_enqueue_message_line());
+    }
+
+    let _round_robin =
+        kernel::advance_early_scheduler_round_robin(kernel::EarlySchedulerHandoffReason::Yield);
+
+    if kernel::dequeue_early_scheduler_task(2).is_ok() {
+        serial.write_all(thread_dequeue_message_line());
+        screen.write_all(thread_dequeue_message_line());
+    }
+
     serial.write_all(entry_done_message_line());
     screen.write_all(entry_done_message_line());
     EfiStatus::SUCCESS
@@ -453,11 +478,11 @@ mod tests {
         global_allocator_ready_message_line, heap_alloc_cycle_message_line,
         heap_bootstrap_message_line, interrupt_init_message_line, kernel_entry_message_line,
         memory_init_message_line, paging_install_message_line, paging_plan_message_line,
-        panic_message_line, scheduler_handoff_message_line, timer_ack_message_line,
-        timer_first_tick_message_line, timer_handoff_message_line, timer_init_message_line,
-        timer_third_tick_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400,
-        LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
-        VGA_TEXT_ROWS,
+        panic_message_line, scheduler_handoff_message_line, thread_dequeue_message_line,
+        thread_enqueue_message_line, timer_ack_message_line, timer_first_tick_message_line,
+        timer_handoff_message_line, timer_init_message_line, timer_third_tick_message_line,
+        vga_cell_index, EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB,
+        LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
     };
 
     struct VgaWriterModel {
@@ -670,6 +695,22 @@ mod tests {
     }
 
     #[test]
+    fn thread_enqueue_message_line_matches_kernel_canonical_enqueue_line() {
+        assert_eq!(
+            thread_enqueue_message_line(),
+            b"tosm-os: thread enqueue task=2 runq=3 selected=1\r\n"
+        );
+    }
+
+    #[test]
+    fn thread_dequeue_message_line_matches_kernel_canonical_dequeue_line() {
+        assert_eq!(
+            thread_dequeue_message_line(),
+            b"tosm-os: thread dequeue task=2 runq=2 selected=1\r\n"
+        );
+    }
+
+    #[test]
     fn efi_status_success_value_is_zero() {
         assert_eq!(EfiStatus::SUCCESS.0, 0);
     }
@@ -708,6 +749,8 @@ mod tests {
         let timer_columns = timer_init_message_line().len();
         let timer_first_tick_columns = timer_first_tick_message_line().len();
         let scheduler_handoff_columns = scheduler_handoff_message_line().len();
+        let thread_enqueue_columns = thread_enqueue_message_line().len();
+        let thread_dequeue_columns = thread_dequeue_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
         assert!(panic_columns < VGA_TEXT_COLUMNS);
@@ -722,6 +765,8 @@ mod tests {
         assert!(timer_columns < VGA_TEXT_COLUMNS);
         assert!(timer_first_tick_columns < VGA_TEXT_COLUMNS);
         assert!(scheduler_handoff_columns < VGA_TEXT_COLUMNS);
+        assert!(thread_enqueue_columns < VGA_TEXT_COLUMNS);
+        assert!(thread_dequeue_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
     }
 
@@ -766,9 +811,11 @@ mod tests {
         model.write_all(timer_ack_message_line());
         model.write_all(timer_handoff_message_line());
         model.write_all(scheduler_handoff_message_line());
+        model.write_all(thread_enqueue_message_line());
+        model.write_all(thread_dequeue_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 17);
+        assert_eq!(model.row, 19);
         assert_eq!(model.column, 0);
         assert_eq!(
             model.row_text_without_trailing_blanks(0),
@@ -836,10 +883,18 @@ mod tests {
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(16),
+            b"tosm-os: thread enqueue task=2 runq=3 selected=1"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(17),
+            b"tosm-os: thread dequeue task=2 runq=2 selected=1"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(18),
             b"tosm-os: efi_main completed"
         );
         assert_eq!(
-            model.row_bytes(17),
+            model.row_bytes(19),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
         );
     }
@@ -862,6 +917,8 @@ mod tests {
         model.write_all(timer_ack_message_line());
         model.write_all(timer_handoff_message_line());
         model.write_all(scheduler_handoff_message_line());
+        model.write_all(thread_enqueue_message_line());
+        model.write_all(thread_dequeue_message_line());
         model.write_all(entry_done_message_line());
 
         model.init_for_boot_logs();
@@ -924,6 +981,14 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: scheduler handoff reason=timer runq=2 selected=1 idle=0 delta=3"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: thread enqueue task=2 runq=3 selected=1"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: thread dequeue task=2 runq=2 selected=1"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),

@@ -72,6 +72,12 @@ pub const BOOT_TIMER_HANDOFF_LINE: &str =
 pub const BOOT_SCHEDULER_HANDOFF_LINE: &str =
     "tosm-os: scheduler handoff reason=timer runq=2 selected=1 idle=0 delta=3\r\n";
 
+/// Canonical thread-enqueue line emitted when a first worker slot is added to the scheduler queue.
+pub const BOOT_THREAD_ENQUEUE_LINE: &str = "tosm-os: thread enqueue task=2 runq=3 selected=1\r\n";
+
+/// Canonical thread-dequeue line emitted when a modeled worker slot is removed from the queue.
+pub const BOOT_THREAD_DEQUEUE_LINE: &str = "tosm-os: thread dequeue task=2 runq=2 selected=1\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -178,6 +184,18 @@ pub const fn boot_timer_handoff_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_scheduler_handoff_line_bytes() -> &'static [u8] {
     BOOT_SCHEDULER_HANDOFF_LINE.as_bytes()
+}
+
+/// Returns the canonical thread-enqueue line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_enqueue_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_ENQUEUE_LINE.as_bytes()
+}
+
+/// Returns the canonical thread-dequeue line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_dequeue_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_DEQUEUE_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -421,6 +439,23 @@ pub struct EarlySchedulerSnapshot {
 pub struct EarlySchedulerTimerHandoffReport {
     pub timer: EarlyTimerHandoffReport,
     pub scheduler: EarlySchedulerSnapshot,
+}
+
+/// Deterministic scheduler slot-mutation report for enqueue/dequeue modeling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerMutationReport {
+    pub task_id: u32,
+    pub run_queue_depth: usize,
+    pub selected_task_id: u32,
+}
+
+/// Errors returned by deterministic scheduler slot-mutation helpers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlySchedulerMutationError {
+    DuplicateTask,
+    TaskNotFound,
+    RunQueueFull,
+    IdleTaskMutation,
 }
 
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
@@ -1267,17 +1302,126 @@ pub fn sample_early_scheduler_snapshot(
     }
 }
 
+fn scheduler_index_for_task(task_id: u32) -> Option<usize> {
+    let mut slot_index = 0;
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    unsafe {
+        while slot_index < EARLY_SCHEDULER_MAX_SLOTS {
+            let slot = EARLY_SCHEDULER_SLOTS[slot_index];
+            if slot.runnable && slot.task_id == task_id {
+                return Some(slot_index);
+            }
+            slot_index += 1;
+        }
+    }
+    None
+}
+
+fn next_runnable_scheduler_index(current_index: usize) -> Option<usize> {
+    let mut offset = 1;
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    unsafe {
+        while offset <= EARLY_SCHEDULER_MAX_SLOTS {
+            let candidate = (current_index + offset) % EARLY_SCHEDULER_MAX_SLOTS;
+            if EARLY_SCHEDULER_SLOTS[candidate].runnable {
+                return Some(candidate);
+            }
+            offset += 1;
+        }
+    }
+    None
+}
+
+/// Advances deterministic scheduler selection using simple round-robin runnable-slot scanning.
+#[must_use]
+pub fn advance_early_scheduler_round_robin(
+    reason: EarlySchedulerHandoffReason,
+) -> EarlySchedulerSnapshot {
+    let selected_index = EARLY_SCHEDULER_SELECTED_INDEX.load(Ordering::SeqCst) as usize;
+    let next_index = next_runnable_scheduler_index(selected_index).unwrap_or(selected_index);
+    EARLY_SCHEDULER_SELECTED_INDEX.store(next_index as u64, Ordering::SeqCst);
+    sample_early_scheduler_snapshot(reason)
+}
+
+/// Enqueues a deterministic runnable slot for first thread-model integration.
+pub fn enqueue_early_scheduler_task(
+    task_id: u32,
+) -> Result<EarlySchedulerMutationReport, EarlySchedulerMutationError> {
+    if task_id == EARLY_IDLE_TASK_ID {
+        return Err(EarlySchedulerMutationError::IdleTaskMutation);
+    }
+
+    if scheduler_index_for_task(task_id).is_some() {
+        return Err(EarlySchedulerMutationError::DuplicateTask);
+    }
+
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    unsafe {
+        let mut slot_index = 0;
+        while slot_index < EARLY_SCHEDULER_MAX_SLOTS {
+            if !EARLY_SCHEDULER_SLOTS[slot_index].runnable {
+                EARLY_SCHEDULER_SLOTS[slot_index] = EarlySchedulerSlot {
+                    task_id,
+                    runnable: true,
+                };
+                let snapshot = sample_early_scheduler_snapshot(EarlySchedulerHandoffReason::Yield);
+                return Ok(EarlySchedulerMutationReport {
+                    task_id,
+                    run_queue_depth: snapshot.run_queue_depth,
+                    selected_task_id: snapshot.selected_task_id,
+                });
+            }
+            slot_index += 1;
+        }
+    }
+
+    Err(EarlySchedulerMutationError::RunQueueFull)
+}
+
+/// Dequeues a deterministic runnable slot to model first thread teardown from the queue.
+pub fn dequeue_early_scheduler_task(
+    task_id: u32,
+) -> Result<EarlySchedulerMutationReport, EarlySchedulerMutationError> {
+    if task_id == EARLY_IDLE_TASK_ID {
+        return Err(EarlySchedulerMutationError::IdleTaskMutation);
+    }
+
+    let Some(slot_index) = scheduler_index_for_task(task_id) else {
+        return Err(EarlySchedulerMutationError::TaskNotFound);
+    };
+
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    unsafe {
+        EARLY_SCHEDULER_SLOTS[slot_index] = EarlySchedulerSlot {
+            task_id: 0,
+            runnable: false,
+        };
+    }
+
+    let selected_index = EARLY_SCHEDULER_SELECTED_INDEX.load(Ordering::SeqCst) as usize;
+    if selected_index == slot_index {
+        let _ = advance_early_scheduler_round_robin(EarlySchedulerHandoffReason::Yield);
+    }
+
+    let snapshot = sample_early_scheduler_snapshot(EarlySchedulerHandoffReason::Yield);
+    Ok(EarlySchedulerMutationReport {
+        task_id,
+        run_queue_depth: snapshot.run_queue_depth,
+        selected_task_id: snapshot.selected_task_id,
+    })
+}
+
 /// Advances deterministic scheduler selection using timer handoff delta and returns combined state.
 #[must_use]
 pub fn take_early_scheduler_timer_handoff(
     config: EarlyTimerInitReport,
 ) -> EarlySchedulerTimerHandoffReport {
     let timer = take_early_timer_handoff(config);
-    if timer.scheduler_quantum_elapsed {
-        EARLY_SCHEDULER_SELECTED_INDEX.store(EARLY_BOOTSTRAP_TASK_ID as u64, Ordering::SeqCst);
-    }
-
-    let scheduler = sample_early_scheduler_snapshot(EarlySchedulerHandoffReason::Timer);
+    let scheduler = if timer.scheduler_quantum_elapsed {
+        advance_early_scheduler_round_robin(EarlySchedulerHandoffReason::Timer)
+    } else {
+        sample_early_scheduler_snapshot(EarlySchedulerHandoffReason::Timer)
+    };
     EarlySchedulerTimerHandoffReport { timer, scheduler }
 }
 
@@ -1622,30 +1766,33 @@ extern crate std;
 #[cfg(test)]
 mod tests {
     use super::{
-        boot_banner_bytes, boot_banner_line_bytes, boot_entry_done_line_bytes,
-        boot_global_allocator_probe_line_bytes, boot_global_allocator_ready_line_bytes,
-        boot_heap_alloc_cycle_line_bytes, boot_heap_bootstrap_line_bytes,
-        boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
-        boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
-        boot_scheduler_handoff_line_bytes, boot_timer_ack_line_bytes,
+        advance_early_scheduler_round_robin, boot_banner_bytes, boot_banner_line_bytes,
+        boot_entry_done_line_bytes, boot_global_allocator_probe_line_bytes,
+        boot_global_allocator_ready_line_bytes, boot_heap_alloc_cycle_line_bytes,
+        boot_heap_bootstrap_line_bytes, boot_interrupt_init_line_bytes,
+        boot_memory_init_line_bytes, boot_paging_install_line_bytes, boot_paging_plan_line_bytes,
+        boot_panic_line_bytes, boot_scheduler_handoff_line_bytes, boot_thread_dequeue_line_bytes,
+        boot_thread_enqueue_line_bytes, boot_timer_ack_line_bytes,
         boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
         boot_timer_init_line_bytes, boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
-        dispatch_early_timer_interrupt, dispatch_exception, early_idt_descriptor,
-        early_idt_entries, early_paging_table_snapshot, early_physical_memory_map,
-        early_translation_state_valid, exception_log_line, exception_log_line_bytes,
-        init_early_global_allocator, init_early_interrupts, init_early_paging_plan,
-        init_early_physical_memory, init_early_timer, install_early_paging,
-        is_canonical_virtual_address, is_page_aligned_4k, record_early_timer_tick,
-        reset_early_scheduler_state, reset_early_timer_ticks, run_early_global_allocator_probe,
-        run_early_heap_alloc_cycle, sample_early_timer_handoff, take_early_scheduler_timer_handoff,
-        take_early_timer_handoff, translate_early_virtual_to_physical, EarlyFrameAllocationError,
-        EarlyFrameAllocator, EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
+        dequeue_early_scheduler_task, dispatch_early_timer_interrupt, dispatch_exception,
+        early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
+        early_physical_memory_map, early_translation_state_valid, enqueue_early_scheduler_task,
+        exception_log_line, exception_log_line_bytes, init_early_global_allocator,
+        init_early_interrupts, init_early_paging_plan, init_early_physical_memory,
+        init_early_timer, install_early_paging, is_canonical_virtual_address, is_page_aligned_4k,
+        record_early_timer_tick, reset_early_scheduler_state, reset_early_timer_ticks,
+        run_early_global_allocator_probe, run_early_heap_alloc_cycle, sample_early_timer_handoff,
+        take_early_scheduler_timer_handoff, take_early_timer_handoff,
+        translate_early_virtual_to_physical, EarlyFrameAllocationError, EarlyFrameAllocator,
+        EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
         EarlyHeapDeallocationError, EarlyHeapOperationError, GlobalAllocatorInitError, IdtEntry,
         PhysicalMemoryRegionKind, VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER,
         BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE,
         BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
         BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
-        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_SCHEDULER_HANDOFF_LINE, BOOT_TIMER_ACK_LINE,
+        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_SCHEDULER_HANDOFF_LINE,
+        BOOT_THREAD_DEQUEUE_LINE, BOOT_THREAD_ENQUEUE_LINE, BOOT_TIMER_ACK_LINE,
         BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE,
         BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
     };
@@ -2330,6 +2477,26 @@ mod tests {
     }
 
     #[test]
+    fn thread_enqueue_and_dequeue_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_THREAD_ENQUEUE_LINE,
+            "tosm-os: thread enqueue task=2 runq=3 selected=1\r\n"
+        );
+        assert_eq!(
+            boot_thread_enqueue_line_bytes(),
+            b"tosm-os: thread enqueue task=2 runq=3 selected=1\r\n"
+        );
+        assert_eq!(
+            BOOT_THREAD_DEQUEUE_LINE,
+            "tosm-os: thread dequeue task=2 runq=2 selected=1\r\n"
+        );
+        assert_eq!(
+            boot_thread_dequeue_line_bytes(),
+            b"tosm-os: thread dequeue task=2 runq=2 selected=1\r\n"
+        );
+    }
+
+    #[test]
     fn timer_handoff_sampling_and_take_track_delta_watermark() {
         reset_early_timer_ticks();
         let timer = init_early_timer();
@@ -2386,6 +2553,30 @@ mod tests {
         assert_eq!(after.scheduler.idle_task_id, 0);
 
         reset_early_timer_ticks();
+        reset_early_scheduler_state();
+    }
+
+    #[test]
+    fn scheduler_slot_mutation_and_round_robin_contracts_are_deterministic() {
+        reset_early_scheduler_state();
+
+        let enqueued =
+            enqueue_early_scheduler_task(2).expect("enqueue should add a runnable worker");
+        assert_eq!(enqueued.task_id, 2);
+        assert_eq!(enqueued.run_queue_depth, 3);
+        assert_eq!(enqueued.selected_task_id, 0);
+
+        let first = advance_early_scheduler_round_robin(super::EarlySchedulerHandoffReason::Yield);
+        assert_eq!(first.selected_task_id, 1);
+
+        let second = advance_early_scheduler_round_robin(super::EarlySchedulerHandoffReason::Yield);
+        assert_eq!(second.selected_task_id, 2);
+
+        let dequeued = dequeue_early_scheduler_task(2).expect("dequeue should remove worker task");
+        assert_eq!(dequeued.task_id, 2);
+        assert_eq!(dequeued.run_queue_depth, 2);
+        assert_eq!(dequeued.selected_task_id, 0);
+
         reset_early_scheduler_state();
     }
 
