@@ -5,6 +5,7 @@ set -euo pipefail
 # This script intentionally checks for the deterministic boot banner contract
 # until the QEMU boot path is added in a later slice.
 expected_banner='tosm-os: kernel entry reached'
+expected_panic='tosm-os: panic in uefi-entry'
 expected_entry_done='tosm-os: efi_main completed'
 
 if ! grep --fixed-strings --quiet -- "${expected_banner}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
@@ -17,4 +18,9 @@ if ! grep --fixed-strings --quiet -- "${expected_entry_done}" kernel/src/lib.rs 
   exit 1
 fi
 
-echo "smoke: boot banner and completion contracts present"
+if ! grep --fixed-strings --quiet -- "${expected_panic}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+  echo "smoke: expected panic line not found"
+  exit 1
+fi
+
+echo "smoke: boot banner, panic, and completion contracts present"

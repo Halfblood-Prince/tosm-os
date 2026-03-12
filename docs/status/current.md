@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: fix rustfmt failure for canonical efi_main completion-line test formatting
-- Status: in_progress (formatted completion-line assertion to match rustfmt output; awaiting CI rerun)
+- Subtask: extend smoke contract coverage to include canonical early-boot panic line
+- Status: in_progress (added panic-line presence check to smoke gate; awaiting CI rerun)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
