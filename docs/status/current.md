@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: centralize early-boot panic serial line in kernel banner API
-- Status: in_progress (panic-line centralization slice implemented; awaiting CI run)
+- Subtask: add canonical efi_main completion serial line to kernel banner API
+- Status: in_progress (efi_main completion-line slice implemented; awaiting CI run)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
