@@ -3,12 +3,12 @@
 - Workflow: CI
 - Conclusion: failure
 - Branch: main
-- Commit: `0fd35c1da515c536424af426e7584ec02b306711`
-- Run ID: 23015600938
+- Commit: `799b5049ab8e54436b3439dfba6459087d9c1824`
+- Run ID: 23015950612
 - Run attempt: 1
 - Event: push
-- Updated at: 2026-03-12T17:40:46Z
-- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23015600938
+- Updated at: 2026-03-12T17:48:38Z
+- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23015950612
 
 ## Job results
 
@@ -53,7 +53,6 @@ Recommended next action: **fix the smallest concrete failure from the latest CI 
 - `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.00s
 - `smoke`: ERROR:system/cpus.c:504:qemu_mutex_lock_iothread_impl: assertion failed: (!qemu_mutex_iothread_locked())
 - `smoke`: Bail out! ERROR:system/cpus.c:504:qemu_mutex_lock_iothread_impl: assertion failed: (!qemu_mutex_iothread_locked())
-- `smoke`: smoke: QEMU execution failed with status 134
 
 ## Stored reports
 

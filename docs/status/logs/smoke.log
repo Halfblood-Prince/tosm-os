@@ -65,5 +65,5 @@ smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-order
 ERROR:system/cpus.c:504:qemu_mutex_lock_iothread_impl: assertion failed: (!qemu_mutex_iothread_locked())
 Bail out! ERROR:system/cpus.c:504:qemu_mutex_lock_iothread_impl: assertion failed: (!qemu_mutex_iothread_locked())
 timeout: the monitored command dumped core
-./tools/smoke-test.sh: line 187:  4181 Aborted                 timeout 20s "${qemu_bin}" -nodefaults -nographic "${qemu_accel_args[@]}" -serial file:"${serial_log}" -drive if=pflash,format=raw,readonly=on,file="${ovmf_code}" -drive if=pflash,format=raw,file="${ovmf_vars_runtime}" -drive format=raw,file=fat:rw:"${SMOKE_RUN_DIR}"
-smoke: QEMU execution failed with status 134
+./tools/smoke-test.sh: line 187:  4161 Aborted                 timeout 20s "${qemu_bin}" -nodefaults -nographic "${qemu_accel_args[@]}" -serial file:"${serial_log}" -drive if=pflash,format=raw,readonly=on,file="${ovmf_code}" -drive if=pflash,format=raw,file="${ovmf_vars_runtime}" -drive format=raw,file=fat:rw:"${SMOKE_RUN_DIR}"
+smoke: QEMU serial output missing paging-install line
