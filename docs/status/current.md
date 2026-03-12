@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: scheduler / threads
-- Subtask: establish deterministic scheduler slot mutation and round-robin selection contracts.
+- Subtask: wire deterministic per-thread context save/restore contracts into scheduler handoff flow.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -41,7 +41,8 @@
 - Completed slice: added kernel timer handoff primitives (`sample_early_timer_handoff`/`take_early_timer_handoff`) with deterministic tick-delta/uptime reports and one-way handoff watermark updates, then integrated a canonical timer-handoff transcript line across UEFI flow and smoke contracts.
 - Completed slice: marked timer support complete by extending the kernel with deterministic scheduler bootstrap models (`reset_early_scheduler_state`, scheduler snapshots, timer-driven scheduler handoff reports), then integrated canonical scheduler-handoff transcript contracts across UEFI flow and smoke checks.
 - Completed slice: added deterministic scheduler slot mutation APIs (`enqueue_early_scheduler_task` / `dequeue_early_scheduler_task`) plus runnable-slot round-robin advancement, then integrated canonical thread enqueue/dequeue transcript contracts across kernel, UEFI boot flow, and smoke checks.
-- Next slice: introduce deterministic per-thread context records and first save/restore contract wiring for scheduler handoff paths.
+- Completed slice: introduced deterministic per-thread context handoff modeling (save/restore register snapshots), integrated canonical thread-context transcript lines across kernel + UEFI boot flow, and extended tests/smoke contracts to cover the new handoff output.
+- Next slice: model context-switch cause/state metadata (reason, tick, and queue watermark) alongside handoff snapshots.
 
 <!-- ci-status:start -->
 ## Latest CI automation

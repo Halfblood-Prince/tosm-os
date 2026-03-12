@@ -78,6 +78,14 @@ pub const BOOT_THREAD_ENQUEUE_LINE: &str = "tosm-os: thread enqueue task=2 runq=
 /// Canonical thread-dequeue line emitted when a modeled worker slot is removed from the queue.
 pub const BOOT_THREAD_DEQUEUE_LINE: &str = "tosm-os: thread dequeue task=2 runq=2 selected=1\r\n";
 
+/// Canonical thread-ctx-save line emitted when scheduler handoff snapshots outgoing state.
+pub const BOOT_THREAD_CONTEXT_SAVE_LINE: &str =
+    "tosm-os: thread ctx save from=1 to=2 rip=0x100200 rsp=0x401f00\r\n";
+
+/// Canonical thread-ctx-restore line emitted when scheduler handoff activates incoming state.
+pub const BOOT_THREAD_CONTEXT_RESTORE_LINE: &str =
+    "tosm-os: thread ctx restore to=2 rip=0x200000 rsp=0x402000\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -196,6 +204,18 @@ pub const fn boot_thread_enqueue_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_thread_dequeue_line_bytes() -> &'static [u8] {
     BOOT_THREAD_DEQUEUE_LINE.as_bytes()
+}
+
+/// Returns the canonical thread-ctx-save line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_context_save_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_CONTEXT_SAVE_LINE.as_bytes()
+}
+
+/// Returns the canonical thread-ctx-restore line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_context_restore_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_CONTEXT_RESTORE_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -447,6 +467,30 @@ pub struct EarlySchedulerMutationReport {
     pub task_id: u32,
     pub run_queue_depth: usize,
     pub selected_task_id: u32,
+}
+
+/// Deterministic per-thread register snapshot used for early context handoff modeling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyThreadContext {
+    pub task_id: u32,
+    pub instruction_pointer: u64,
+    pub stack_pointer: u64,
+}
+
+/// Deterministic thread context handoff report produced during scheduler transition modeling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyThreadContextHandoffReport {
+    pub from_task_id: u32,
+    pub to_task_id: u32,
+    pub saved: EarlyThreadContext,
+    pub restored: EarlyThreadContext,
+}
+
+/// Errors returned by deterministic early thread context handoff helpers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyThreadContextHandoffError {
+    SelectedTaskMissing,
+    TargetTaskNotRunnable,
 }
 
 /// Errors returned by deterministic scheduler slot-mutation helpers.
@@ -1425,6 +1469,67 @@ pub fn take_early_scheduler_timer_handoff(
     EarlySchedulerTimerHandoffReport { timer, scheduler }
 }
 
+const fn modeled_thread_context(task_id: u32) -> EarlyThreadContext {
+    match task_id {
+        EARLY_IDLE_TASK_ID => EarlyThreadContext {
+            task_id,
+            instruction_pointer: 0x0000_0000_0010_0000,
+            stack_pointer: 0x0000_0000_0040_1000,
+        },
+        EARLY_BOOTSTRAP_TASK_ID => EarlyThreadContext {
+            task_id,
+            instruction_pointer: 0x0000_0000_0010_0200,
+            stack_pointer: 0x0000_0000_0040_1f00,
+        },
+        2 => EarlyThreadContext {
+            task_id,
+            instruction_pointer: 0x0000_0000_0020_0000,
+            stack_pointer: 0x0000_0000_0040_2000,
+        },
+        _ => EarlyThreadContext {
+            task_id,
+            instruction_pointer: 0x0000_0000_0030_0000,
+            stack_pointer: 0x0000_0000_0040_3000,
+        },
+    }
+}
+
+/// Models deterministic per-thread ctx save/restore records for scheduler handoff paths.
+pub fn model_early_thread_context_handoff(
+    next_task_id: u32,
+) -> Result<EarlyThreadContextHandoffReport, EarlyThreadContextHandoffError> {
+    let selected_index = EARLY_SCHEDULER_SELECTED_INDEX.load(Ordering::SeqCst) as usize;
+    if selected_index >= EARLY_SCHEDULER_MAX_SLOTS {
+        return Err(EarlyThreadContextHandoffError::SelectedTaskMissing);
+    }
+
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    let from_slot = unsafe {
+        core::ptr::read(
+            (&raw const EARLY_SCHEDULER_SLOTS)
+                .cast::<EarlySchedulerSlot>()
+                .add(selected_index),
+        )
+    };
+    if !from_slot.runnable {
+        return Err(EarlyThreadContextHandoffError::SelectedTaskMissing);
+    }
+
+    let Some(to_index) = scheduler_index_for_task(next_task_id) else {
+        return Err(EarlyThreadContextHandoffError::TargetTaskNotRunnable);
+    };
+
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    let to_slot = unsafe { EARLY_SCHEDULER_SLOTS[to_index] };
+
+    Ok(EarlyThreadContextHandoffReport {
+        from_task_id: from_slot.task_id,
+        to_task_id: to_slot.task_id,
+        saved: modeled_thread_context(from_slot.task_id),
+        restored: modeled_thread_context(to_slot.task_id),
+    })
+}
+
 /// Number of architectural exception vectors reserved at boot.
 pub const EXCEPTION_VECTOR_COUNT: usize = 32;
 
@@ -1771,8 +1876,9 @@ mod tests {
         boot_global_allocator_ready_line_bytes, boot_heap_alloc_cycle_line_bytes,
         boot_heap_bootstrap_line_bytes, boot_interrupt_init_line_bytes,
         boot_memory_init_line_bytes, boot_paging_install_line_bytes, boot_paging_plan_line_bytes,
-        boot_panic_line_bytes, boot_scheduler_handoff_line_bytes, boot_thread_dequeue_line_bytes,
-        boot_thread_enqueue_line_bytes, boot_timer_ack_line_bytes,
+        boot_panic_line_bytes, boot_scheduler_handoff_line_bytes,
+        boot_thread_context_restore_line_bytes, boot_thread_context_save_line_bytes,
+        boot_thread_dequeue_line_bytes, boot_thread_enqueue_line_bytes, boot_timer_ack_line_bytes,
         boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
         boot_timer_init_line_bytes, boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
         dequeue_early_scheduler_task, dispatch_early_timer_interrupt, dispatch_exception,
@@ -1781,9 +1887,9 @@ mod tests {
         exception_log_line, exception_log_line_bytes, init_early_global_allocator,
         init_early_interrupts, init_early_paging_plan, init_early_physical_memory,
         init_early_timer, install_early_paging, is_canonical_virtual_address, is_page_aligned_4k,
-        record_early_timer_tick, reset_early_scheduler_state, reset_early_timer_ticks,
-        run_early_global_allocator_probe, run_early_heap_alloc_cycle, sample_early_timer_handoff,
-        take_early_scheduler_timer_handoff, take_early_timer_handoff,
+        model_early_thread_context_handoff, record_early_timer_tick, reset_early_scheduler_state,
+        reset_early_timer_ticks, run_early_global_allocator_probe, run_early_heap_alloc_cycle,
+        sample_early_timer_handoff, take_early_scheduler_timer_handoff, take_early_timer_handoff,
         translate_early_virtual_to_physical, EarlyFrameAllocationError, EarlyFrameAllocator,
         EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
         EarlyHeapDeallocationError, EarlyHeapOperationError, GlobalAllocatorInitError, IdtEntry,
@@ -1792,9 +1898,10 @@ mod tests {
         BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
         BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
         BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_SCHEDULER_HANDOFF_LINE,
-        BOOT_THREAD_DEQUEUE_LINE, BOOT_THREAD_ENQUEUE_LINE, BOOT_TIMER_ACK_LINE,
-        BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE,
-        BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
+        BOOT_THREAD_CONTEXT_RESTORE_LINE, BOOT_THREAD_CONTEXT_SAVE_LINE, BOOT_THREAD_DEQUEUE_LINE,
+        BOOT_THREAD_ENQUEUE_LINE, BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE,
+        BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE,
+        EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -2576,6 +2683,44 @@ mod tests {
         assert_eq!(dequeued.task_id, 2);
         assert_eq!(dequeued.run_queue_depth, 2);
         assert_eq!(dequeued.selected_task_id, 0);
+
+        reset_early_scheduler_state();
+    }
+
+    #[test]
+    fn thread_context_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_THREAD_CONTEXT_SAVE_LINE,
+            "tosm-os: thread ctx save from=1 to=2 rip=0x100200 rsp=0x401f00\r\n"
+        );
+        assert_eq!(
+            boot_thread_context_save_line_bytes(),
+            b"tosm-os: thread ctx save from=1 to=2 rip=0x100200 rsp=0x401f00\r\n"
+        );
+        assert_eq!(
+            BOOT_THREAD_CONTEXT_RESTORE_LINE,
+            "tosm-os: thread ctx restore to=2 rip=0x200000 rsp=0x402000\r\n"
+        );
+        assert_eq!(
+            boot_thread_context_restore_line_bytes(),
+            b"tosm-os: thread ctx restore to=2 rip=0x200000 rsp=0x402000\r\n"
+        );
+    }
+
+    #[test]
+    fn scheduler_context_handoff_reports_saved_and_restored_registers() {
+        reset_early_scheduler_state();
+        enqueue_early_scheduler_task(2).expect("enqueue should add worker task");
+        let _ = advance_early_scheduler_round_robin(super::EarlySchedulerHandoffReason::Yield);
+
+        let handoff = model_early_thread_context_handoff(2)
+            .expect("context handoff should succeed for runnable target");
+        assert_eq!(handoff.from_task_id, 1);
+        assert_eq!(handoff.to_task_id, 2);
+        assert_eq!(handoff.saved.instruction_pointer, 0x0000_0000_0010_0200);
+        assert_eq!(handoff.saved.stack_pointer, 0x0000_0000_0040_1f00);
+        assert_eq!(handoff.restored.instruction_pointer, 0x0000_0000_0020_0000);
+        assert_eq!(handoff.restored.stack_pointer, 0x0000_0000_0040_2000);
 
         reset_early_scheduler_state();
     }
