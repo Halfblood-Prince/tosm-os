@@ -11,7 +11,7 @@ Canonical boot banner:
 
 - `tosm-os: kernel entry reached`
 
-A temporary smoke script (`tools/smoke-test.sh`) currently enforces the deterministic boot banner contract while QEMU automation is still pending.
+A temporary smoke script (`tools/smoke-test.sh`) currently enforces deterministic serial message contracts (boot banner, panic line, and completion line) while QEMU automation is still pending.
 
 Workspace validation commands are wired through canonical `make` targets:
 
