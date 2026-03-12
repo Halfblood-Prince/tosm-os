@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: extend smoke contract coverage to include canonical early-boot panic line
-- Status: in_progress (added panic-line presence check to smoke gate; awaiting CI rerun)
+- Subtask: extend smoke contract coverage to assert canonical CRLF-terminated line literals for banner, panic, and completion
+- Status: in_progress (added CRLF literal checks for banner/panic/completion in smoke gate; awaiting CI rerun)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
