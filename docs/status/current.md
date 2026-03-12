@@ -1,7 +1,7 @@
 # Current milestone
 
-- Active milestone: kernel allocator
-- Subtask: materialize allocation/deallocation operations over the bootstrapped early heap window.
+- Active milestone: timer support
+- Subtask: add deterministic early timer initialization contracts and integrate first boot transcript line.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -34,7 +34,8 @@
 - Completed slice: threaded `EarlyFrameAllocator` through a first deterministic kernel-heap bootstrap path (4x4KiB at VA 0x00400000), including canonical heap bootstrap transcript contracts across kernel/UEFI/smoke checks.
 - Completed slice: added a deterministic early-heap bump allocator with tracked allocate/deallocate operations, plus a canonical boot-time alloc-cycle contract (`allocs=2 frees=2 cursor=0x00400000`) wired through kernel tests, UEFI transcript output, and smoke checks.
 - Completed slice: connected the early-heap bootstrap window to a minimal `GlobalAlloc` facade with one-time initialization/state reporting contracts, and integrated a canonical global-allocator-ready boot transcript line across kernel/UEFI/smoke checks.
-- Next slice: route a first kernel-owned dynamic structure through the global allocator facade to validate end-to-end allocation usage in boot flow.
+- Completed slice: routed a first kernel-owned dynamic structure through the global allocator facade with deterministic probe contracts (`entries=4 checksum=0x2a`) wired across kernel/UEFI/smoke checks and tests, validating end-to-end allocate/use/free behavior in boot flow.
+- Next slice: start timer support with a deterministic early initialization report and canonical boot transcript line.
 
 <!-- ci-status:start -->
 ## Latest CI automation
