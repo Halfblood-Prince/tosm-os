@@ -3,12 +3,12 @@
 - Workflow: CI
 - Conclusion: success
 - Branch: main
-- Commit: `239359a7c32a87c29b89d6abb895107c9dcc42cb`
-- Run ID: 23006078327
+- Commit: `dccd716ecde6b0b6b71e7e190b682a26d0d928a0`
+- Run ID: 23006778249
 - Run attempt: 1
 - Event: push
-- Updated at: 2026-03-12T14:10:20Z
-- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23006078327
+- Updated at: 2026-03-12T14:27:46Z
+- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23006778249
 
 ## Job results
 
@@ -33,8 +33,9 @@ Recommended next action: **continue the next unfinished milestone slice; do not 
 - `tests`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name bootx64 --edition=2021 boot/uefi-entry/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=f8ed4a52099efd2f -C extra-filename=-60f3d71e13d89e2f --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib`
 - `tests`: test tests::boot_panic_line_bytes_include_crlf ... ok
 - `tests`: test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+- `tests`: test tests::model_panic_line_renders_on_first_row_after_init ... ok
 - `tests`: test tests::panic_message_line_matches_kernel_canonical_panic_line ... ok
-- `tests`: test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+- `tests`: test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustdoc --edition=2021 --crate-type lib --color always --crate-name kernel --test kernel/src/lib.rs --test-run-directory /home/runner/work/tosm-os/tosm-os/kernel --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps -C embed-bitcode=no --cfg 'feature="default"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default"))' --error-format human`
 - `tests`: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
