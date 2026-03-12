@@ -5,9 +5,6 @@ on:
     branches: [main]
     paths-ignore:
       - 'docs/status/**'
-  pull_request:
-    paths-ignore:
-      - 'docs/status/**'
   workflow_dispatch:
 
 permissions:
@@ -192,33 +189,6 @@ jobs:
             echo "- rust-checks-${{ github.run_id }}"
             echo "- boot-smoke-${{ github.run_id }}"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Create GitHub issue on failure
-        if: ${{ needs.rust-checks.result != 'success' || needs.boot-smoke.result != 'success' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const title = `CI failure: run ${context.runId}`;
-            const body = [
-              'A CI workflow failed.',
-              '',
-              `- Workflow: ${context.workflow}`,
-              `- Run ID: ${context.runId}`,
-              `- Ref: ${context.ref}`,
-              `- SHA: ${context.sha}`,
-              `- rust-checks: ${{ needs.rust-checks.result }}`,
-              `- boot-smoke: ${{ needs.boot-smoke.result }}`,
-              '',
-              `Open the workflow run for logs and downloaded artifacts: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            ].join('\n');
-
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title,
-              body,
-              labels: ['ci-failure']
-            });
 
       - name: Fail workflow if any job failed
         run: |
