@@ -1,17 +1,3 @@
 [1m[92m    Checking[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
 [1m[92m    Checking[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[91merror[0m[1m: unwinding panics are not supported without std[0m
-  [1m[94m|[0m
-  [1m[94m= [0m[1mhelp[0m: using nightly cargo, use -Zbuild-std with panic="abort" to avoid unwinding
-  [1m[94m= [0m[1mnote[0m: since the core library is usually precompiled with panic="unwind", rebuilding your crate with panic="abort" may not be enough to fix the problem
-
-[1m[91merror[E0152][0m[1m: duplicate lang item in crate `std` (which `test` depends on): `panic_impl`[0m
-  [1m[94m|[0m
-  [1m[94m= [0m[1mnote[0m: the lang item is first defined in crate `uefi_entry` (which `bootx64` depends on)
-  [1m[94m= [0m[1mnote[0m: first definition in `uefi_entry` loaded from /home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-1a0a8419e79a5334.rmeta
-  [1m[94m= [0m[1mnote[0m: second definition in `std` loaded from /home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-267b04dbd87607fb.rmeta
-
-[1mFor more information about this error, try `rustc --explain E0152`.[0m
-[1m[91merror[0m: could not compile `uefi-entry` (bin "bootx64") due to 1 previous error
-[1m[33mwarning[0m: build failed, waiting for other jobs to finish...
-[1m[91merror[0m: could not compile `uefi-entry` (bin "bootx64" test) due to 1 previous error
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
