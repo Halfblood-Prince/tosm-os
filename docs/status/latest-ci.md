@@ -3,12 +3,12 @@
 - Workflow: CI
 - Conclusion: failure
 - Branch: main
-- Commit: `799b5049ab8e54436b3439dfba6459087d9c1824`
-- Run ID: 23015950612
+- Commit: `486be35060f244608c987ffbe451fcb811c7f0b8`
+- Run ID: 23016348132
 - Run attempt: 1
 - Event: push
-- Updated at: 2026-03-12T17:48:38Z
-- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23015950612
+- Updated at: 2026-03-12T17:58:10Z
+- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23016348132
 
 ## Job results
 
