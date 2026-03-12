@@ -46,7 +46,10 @@ find_ovmf_code() {
   local candidate
   for candidate in \
     "${OVMF_CODE_PATH:-}" \
+    /usr/share/OVMF/OVMF_CODE_4M.fd \
     /usr/share/OVMF/OVMF_CODE.fd \
+    /usr/share/edk2/ovmf/OVMF_CODE.fd \
+    /usr/share/edk2/ovmf/OVMF_CODE_4M.fd \
     /usr/share/ovmf/OVMF.fd \
     /usr/share/edk2/x64/OVMF_CODE.fd; do
     if [[ -n "${candidate}" && -f "${candidate}" ]]; then
@@ -61,7 +64,10 @@ find_ovmf_vars() {
   local candidate
   for candidate in \
     "${OVMF_VARS_PATH:-}" \
+    /usr/share/OVMF/OVMF_VARS_4M.fd \
     /usr/share/OVMF/OVMF_VARS.fd \
+    /usr/share/edk2/ovmf/OVMF_VARS.fd \
+    /usr/share/edk2/ovmf/OVMF_VARS_4M.fd \
     /usr/share/edk2/x64/OVMF_VARS.fd; do
     if [[ -n "${candidate}" && -f "${candidate}" ]]; then
       printf '%s\n' "${candidate}"
@@ -74,16 +80,28 @@ find_ovmf_vars() {
 run_qemu_smoke() {
   local qemu_bin="${QEMU_BIN:-qemu-system-x86_64}"
   if ! command -v "${qemu_bin}" >/dev/null 2>&1; then
+    if [[ "${REQUIRE_QEMU_SMOKE:-0}" -eq 1 ]]; then
+      echo "smoke: ${qemu_bin} unavailable but REQUIRE_QEMU_SMOKE=1"
+      exit 1
+    fi
     echo "smoke: ${qemu_bin} unavailable, skipping QEMU execution"
     return 2
   fi
 
   local ovmf_code ovmf_vars
   if ! ovmf_code="$(find_ovmf_code)"; then
+    if [[ "${REQUIRE_QEMU_SMOKE:-0}" -eq 1 ]]; then
+      echo "smoke: OVMF code firmware unavailable but REQUIRE_QEMU_SMOKE=1"
+      exit 1
+    fi
     echo "smoke: OVMF code firmware unavailable, skipping QEMU execution"
     return 2
   fi
   if ! ovmf_vars="$(find_ovmf_vars)"; then
+    if [[ "${REQUIRE_QEMU_SMOKE:-0}" -eq 1 ]]; then
+      echo "smoke: OVMF vars firmware unavailable but REQUIRE_QEMU_SMOKE=1"
+      exit 1
+    fi
     echo "smoke: OVMF vars firmware unavailable, skipping QEMU execution"
     return 2
   fi
@@ -102,13 +120,18 @@ run_qemu_smoke() {
   mkdir -p "${run_dir}/EFI/BOOT"
   cp "${efi_path}" "${run_dir}/EFI/BOOT/BOOTX64.EFI"
 
+  # OVMF variable stores are mutable. Always use a temp copy so each run is deterministic
+  # and never mutates global firmware state in CI workers.
+  local ovmf_vars_runtime="${run_dir}/OVMF_VARS.fd"
+  cp "${ovmf_vars}" "${ovmf_vars_runtime}"
+
   local serial_log="${run_dir}/serial.log"
   timeout 20s "${qemu_bin}" \
     -nodefaults \
     -nographic \
     -serial file:"${serial_log}" \
     -drive if=pflash,format=raw,readonly=on,file="${ovmf_code}" \
-    -drive if=pflash,format=raw,file="${ovmf_vars}" \
+    -drive if=pflash,format=raw,file="${ovmf_vars_runtime}" \
     -drive format=raw,file=fat:rw:"${run_dir}"
 
   if ! grep --fixed-strings --quiet -- "${expected_banner}" "${serial_log}"; then
