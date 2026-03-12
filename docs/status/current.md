@@ -22,8 +22,8 @@
 ## Latest CI automation
 
 - Last CI conclusion: success
-- Last CI run: `23009842256`
-- Last tested commit: `6a961fdb2d712f98a0d5ef3d5a661ed68f8009c1`
+- Last CI run: `23010056950`
+- Last tested commit: `f825672b4fc1dfa7ebfd0fcdf1de12a10c1cf57d`
 - Recommended next action for Codex: continue the next unfinished milestone slice; do not redo already-green validation work
 - Detailed summary: `docs/status/latest-ci.md`
 <!-- ci-status:end -->

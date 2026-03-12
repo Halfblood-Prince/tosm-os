@@ -3,12 +3,12 @@
 - Workflow: CI
 - Conclusion: success
 - Branch: main
-- Commit: `6a961fdb2d712f98a0d5ef3d5a661ed68f8009c1`
-- Run ID: 23009842256
+- Commit: `f825672b4fc1dfa7ebfd0fcdf1de12a10c1cf57d`
+- Run ID: 23010056950
 - Run attempt: 1
 - Event: push
-- Updated at: 2026-03-12T15:31:42Z
-- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23009842256
+- Updated at: 2026-03-12T15:35:44Z
+- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23010056950
 
 ## Job results
 
@@ -45,6 +45,8 @@ Recommended next action: **continue the next unfinished milestone slice; do not 
 - `build`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name bootx64 --edition=2021 boot/uefi-entry/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=6b5032e417c7913e -C extra-filename=-cf7c0a985f3d483b --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib`
 - `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
 - `smoke`: test tests::model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines ... ok
+- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
 - `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
 - `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
 
