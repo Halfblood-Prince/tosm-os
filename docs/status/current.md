@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: serial and screen output
-- Subtask: clear CI format gate after VGA mirror slice by fixing rustfmt ordering in `boot/uefi-entry` tests
-- Status: completed (updated `boot/uefi-entry/src/lib.rs` test imports to match rustfmt output, addressing the only failing CI job while preserving behavior)
+- Subtask: make VGA boot output deterministic by initializing screen state and replacing row wraparound with explicit scroll + row clear behavior
+- Status: completed (added explicit VGA init/clear behavior plus deterministic newline handling that clears destination rows and scrolls upward at the bottom)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: fixed the CI `make fmt` failure by reordering the `boot/uefi-entry` test-module import list to the canonical rustfmt layout.
-- Next slice: keep milestone 2 moving by adding deterministic row management for the VGA path (for example clearing/initializing first lines before writing) while preserving canonical message parity with serial output.
+- Completed slice: implemented deterministic VGA row management in `boot/uefi-entry` by clearing the text buffer at entry, clearing each destination row on newline, and scrolling screen contents upward at the bottom instead of wrapping to row 0.
+- Next slice: continue milestone 2 by adding a small host-testable VGA writer model in `boot/uefi-entry` tests so newline/scroll semantics are validated independent of hardware memory side effects.
 
 <!-- ci-status:start -->
 ## Latest CI automation
