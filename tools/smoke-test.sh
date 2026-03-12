@@ -234,7 +234,7 @@ run_qemu_smoke() {
   cp "${ovmf_vars}" "${ovmf_vars_runtime}"
 
   local serial_log="${SMOKE_RUN_DIR}/serial.log"
-  local qemu_accel_args=("-accel" "tcg,thread=single")
+  local qemu_accel_args=("-accel" "tcg")
   if [[ -n "${QEMU_ACCEL_ARGS:-}" ]]; then
     # shellcheck disable=SC2206
     qemu_accel_args=(${QEMU_ACCEL_ARGS})
