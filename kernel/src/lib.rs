@@ -139,6 +139,11 @@ extern "C" fn early_exception_stub() {
     }
 }
 
+#[must_use]
+fn early_exception_stub_addr() -> usize {
+    early_exception_stub as *const () as usize
+}
+
 static EARLY_IDT_READY: AtomicBool = AtomicBool::new(false);
 static mut EARLY_IDT: [IdtEntry; EXCEPTION_VECTOR_COUNT] =
     [IdtEntry::missing(); EXCEPTION_VECTOR_COUNT];
@@ -151,7 +156,7 @@ fn ensure_early_idt_populated() {
     // SAFETY: During early single-core initialization we populate a fixed static IDT table
     // exactly once before publishing readiness with release ordering.
     unsafe {
-        let handler = early_exception_stub as usize;
+        let handler = early_exception_stub_addr();
         let mut index = 0;
         while index < EXCEPTION_VECTOR_COUNT {
             EARLY_IDT[index] = IdtEntry::interrupt_gate(handler);
@@ -190,7 +195,7 @@ pub fn init_early_interrupts() -> InterruptInitReport {
     InterruptInitReport {
         vectors_initialized: EXCEPTION_VECTOR_COUNT,
         descriptor,
-        handler_addr: early_exception_stub as usize,
+        handler_addr: early_exception_stub_addr(),
     }
 }
 
