@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: make QEMU smoke mandatory in CI with deterministic OVMF handling while keeping local smoke checks portable
-- Status: completed (CI smoke step now requires QEMU execution and smoke tooling handles broader OVMF layouts plus per-run mutable vars copies)
+- Subtask: make CI smoke build UEFI target successfully by provisioning `x86_64-unknown-uefi` in the smoke job toolchain setup
+- Status: completed (boot-smoke CI now installs the UEFI compilation target before invoking `tools/smoke-test.sh`)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: made CI smoke execution mandatory by running `tools/smoke-test.sh` with `REQUIRE_QEMU_SMOKE=1`, expanded OVMF discovery for common Linux layouts (including 4M images), and switched QEMU to use a temporary copy of OVMF vars for deterministic, isolated runs.
-- Next slice: start milestone 2 (`serial and screen output`) by adding a minimal screen-output path (framebuffer or UEFI console) that mirrors the canonical early boot messages currently emitted on serial.
+- Completed slice: fixed the smallest concrete CI failure in smoke by adding `x86_64-unknown-uefi` target installation to `.github/workflows/ci.yml` `boot-smoke` Rust toolchain setup, addressing the reported `can't find crate for core` error during EFI target compilation.
+- Next slice: rerun CI and, on success, begin milestone 2 (`serial and screen output`) by adding a minimal screen-output path that mirrors canonical serial boot messages.
 
 <!-- ci-status:start -->
 ## Latest CI automation
