@@ -1,3 +1,28 @@
 [1m[92m    Checking[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
-[1m[92m    Checking[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.18s
+[1m[91merror[0m[1m: direct cast of function item into an integer[0m
+   [1m[94m--> [0mkernel/src/lib.rs:154:44
+    [1m[94m|[0m
+[1m[94m154[0m [1m[94m|[0m         let handler = early_exception_stub as usize;
+    [1m[94m|[0m                                            [1m[91m^^^^^^^^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mnote[0m: `-D function-casts-as-integer` implied by `-D warnings`
+    [1m[94m= [0m[1mhelp[0m: to override `-D warnings` add `#[allow(function_casts_as_integer)]`
+[1m[96mhelp[0m: first cast to a pointer `as *const ()`
+    [1m[94m|[0m
+[1m[94m154[0m [1m[94m| [0m        let handler = early_exception_stub[92m as *const ()[0m as usize;
+    [1m[94m|[0m                                            [92m++++++++++++[0m
+
+[1m[91merror[0m[1m: direct cast of function item into an integer[0m
+   [1m[94m--> [0mkernel/src/lib.rs:193:44
+    [1m[94m|[0m
+[1m[94m193[0m [1m[94m|[0m         handler_addr: early_exception_stub as usize,
+    [1m[94m|[0m                                            [1m[91m^^^^^^^^[0m
+    [1m[94m|[0m
+[1m[96mhelp[0m: first cast to a pointer `as *const ()`
+    [1m[94m|[0m
+[1m[94m193[0m [1m[94m| [0m        handler_addr: early_exception_stub[92m as *const ()[0m as usize,
+    [1m[94m|[0m                                            [92m++++++++++++[0m
+
+[1m[91merror[0m: could not compile `kernel` (lib) due to 2 previous errors
+[1m[33mwarning[0m: build failed, waiting for other jobs to finish...
+[1m[91merror[0m: could not compile `kernel` (lib test) due to 2 previous errors

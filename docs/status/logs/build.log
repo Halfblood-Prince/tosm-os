@@ -1,4 +1,28 @@
 [1m[92m       Fresh[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
+[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
+   [1m[94m--> [0mkernel/src/lib.rs:154:44
+    [1m[94m|[0m
+[1m[94m154[0m [1m[94m|[0m         let handler = early_exception_stub as usize;
+    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mnote[0m: `#[warn(function_casts_as_integer)]` on by default
+[1m[96mhelp[0m: first cast to a pointer `as *const ()`
+    [1m[94m|[0m
+[1m[94m154[0m [1m[94m| [0m        let handler = early_exception_stub[92m as *const ()[0m as usize;
+    [1m[94m|[0m                                            [92m++++++++++++[0m
+
+[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
+   [1m[94m--> [0mkernel/src/lib.rs:193:44
+    [1m[94m|[0m
+[1m[94m193[0m [1m[94m|[0m         handler_addr: early_exception_stub as usize,
+    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
+    [1m[94m|[0m
+[1m[96mhelp[0m: first cast to a pointer `as *const ()`
+    [1m[94m|[0m
+[1m[94m193[0m [1m[94m| [0m        handler_addr: early_exception_stub[92m as *const ()[0m as usize,
+    [1m[94m|[0m                                            [92m++++++++++++[0m
+
+[1m[33mwarning[0m: `kernel` (lib) generated 2 warnings (run `cargo fix --lib -p kernel` to apply 2 suggestions)
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
 [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name bootx64 --edition=2021 boot/uefi-entry/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=6b5032e417c7913e -C extra-filename=-cf7c0a985f3d483b --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib`
 [1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
