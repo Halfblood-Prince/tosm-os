@@ -35,6 +35,10 @@ pub const BOOT_PAGING_INSTALL_LINE: &str =
 pub const BOOT_HEAP_BOOTSTRAP_LINE: &str =
     "tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4\r\n";
 
+/// Canonical heap-operation line emitted after deterministic allocation/deallocation cycle passes.
+pub const BOOT_HEAP_ALLOC_CYCLE_LINE: &str =
+    "tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -87,6 +91,12 @@ pub const fn boot_paging_install_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_heap_bootstrap_line_bytes() -> &'static [u8] {
     BOOT_HEAP_BOOTSTRAP_LINE.as_bytes()
+}
+
+/// Returns the canonical heap allocation-cycle line (including CRLF) for serial transmitters.
+#[must_use]
+pub const fn boot_heap_alloc_cycle_line_bytes() -> &'static [u8] {
+    BOOT_HEAP_ALLOC_CYCLE_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -190,11 +200,51 @@ pub struct EarlyHeapBootstrapReport {
     pub heap_bytes: u64,
 }
 
+/// Error codes returned by deterministic early-heap allocation operations.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyHeapAllocationError {
+    ZeroSize,
+    InvalidAlignment,
+    OutOfMemory,
+}
+
+/// Error codes returned by deterministic early-heap deallocation operations.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyHeapDeallocationError {
+    UnknownAllocation,
+    DoubleFree,
+}
+
+/// Deterministic record of an allocation carved from the early heap bootstrap window.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyHeapAllocation {
+    pub start_virt: VirtualAddress,
+    pub size_bytes: u64,
+    pub alignment: u64,
+    in_use: bool,
+}
+
+/// Deterministic report for the first boot-time heap allocate/free cycle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyHeapOperationCycleReport {
+    pub allocations: usize,
+    pub deallocations: usize,
+    pub final_cursor_virt: VirtualAddress,
+}
+
+/// Errors returned by deterministic early heap operation-cycle runs.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyHeapOperationError {
+    Allocation(EarlyHeapAllocationError),
+    Deallocation(EarlyHeapDeallocationError),
+}
+
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
 pub const EARLY_PAGING_FRAME_WINDOW_FRAMES: usize = 4;
 pub const EARLY_IDENTITY_MAP_PAGES_4K: usize = 512;
 pub const EARLY_HEAP_START_VIRT: u64 = 0x0040_0000;
 pub const EARLY_HEAP_FRAME_COUNT: usize = 4;
+pub const EARLY_HEAP_MAX_ALLOCATIONS: usize = 16;
 
 const PAGE_TABLE_ENTRY_PRESENT: u64 = 1 << 0;
 const PAGE_TABLE_ENTRY_WRITABLE: u64 = 1 << 1;
@@ -366,6 +416,164 @@ pub fn bootstrap_early_kernel_heap(
     })
 }
 
+const fn align_up(addr: u64, alignment: u64) -> u64 {
+    if alignment <= 1 {
+        addr
+    } else {
+        let mask = alignment - 1;
+        (addr + mask) & !mask
+    }
+}
+
+/// Deterministic bump allocator for the allocator-backed early heap window.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyHeapAllocator {
+    heap_start_virt: u64,
+    heap_end_exclusive_virt: u64,
+    cursor_virt: u64,
+    allocations: [Option<EarlyHeapAllocation>; EARLY_HEAP_MAX_ALLOCATIONS],
+}
+
+impl EarlyHeapAllocator {
+    /// Constructs an allocator over the previously bootstrapped early heap reservation.
+    #[must_use]
+    pub const fn from_bootstrap(report: EarlyHeapBootstrapReport) -> Self {
+        Self {
+            heap_start_virt: report.heap_start_virt.0,
+            heap_end_exclusive_virt: report.heap_end_exclusive_virt.0,
+            cursor_virt: report.heap_start_virt.0,
+            allocations: [None; EARLY_HEAP_MAX_ALLOCATIONS],
+        }
+    }
+
+    /// Returns the deterministic current heap cursor virtual address.
+    #[must_use]
+    pub const fn cursor_virt(&self) -> VirtualAddress {
+        VirtualAddress(self.cursor_virt)
+    }
+
+    /// Returns total bytes currently in-use by tracked allocations.
+    #[must_use]
+    pub fn allocated_bytes(&self) -> u64 {
+        let mut total = 0;
+        let mut index = 0;
+        while index < EARLY_HEAP_MAX_ALLOCATIONS {
+            if let Some(allocation) = self.allocations[index] {
+                if allocation.in_use {
+                    total += allocation.size_bytes;
+                }
+            }
+            index += 1;
+        }
+        total
+    }
+
+    /// Allocates a deterministic chunk from the early heap window.
+    pub fn allocate(
+        &mut self,
+        size_bytes: u64,
+        alignment: u64,
+    ) -> Result<EarlyHeapAllocation, EarlyHeapAllocationError> {
+        if size_bytes == 0 {
+            return Err(EarlyHeapAllocationError::ZeroSize);
+        }
+
+        if alignment == 0 || !alignment.is_power_of_two() {
+            return Err(EarlyHeapAllocationError::InvalidAlignment);
+        }
+
+        let Some(slot_index) = self.first_free_slot() else {
+            return Err(EarlyHeapAllocationError::OutOfMemory);
+        };
+
+        let start_virt = align_up(self.cursor_virt, alignment);
+        let Some(end_exclusive) = start_virt.checked_add(size_bytes) else {
+            return Err(EarlyHeapAllocationError::OutOfMemory);
+        };
+
+        if end_exclusive > self.heap_end_exclusive_virt {
+            return Err(EarlyHeapAllocationError::OutOfMemory);
+        }
+
+        let allocation = EarlyHeapAllocation {
+            start_virt: VirtualAddress(start_virt),
+            size_bytes,
+            alignment,
+            in_use: true,
+        };
+
+        self.allocations[slot_index] = Some(allocation);
+        self.cursor_virt = end_exclusive;
+        Ok(allocation)
+    }
+
+    /// Deallocates a previously-tracked deterministic heap allocation.
+    pub fn deallocate(
+        &mut self,
+        allocation: EarlyHeapAllocation,
+    ) -> Result<(), EarlyHeapDeallocationError> {
+        let mut index = 0;
+        while index < EARLY_HEAP_MAX_ALLOCATIONS {
+            if let Some(existing) = self.allocations[index] {
+                if existing.start_virt == allocation.start_virt
+                    && existing.size_bytes == allocation.size_bytes
+                    && existing.alignment == allocation.alignment
+                {
+                    if !existing.in_use {
+                        return Err(EarlyHeapDeallocationError::DoubleFree);
+                    }
+
+                    let mut freed = existing;
+                    freed.in_use = false;
+                    self.allocations[index] = Some(freed);
+
+                    if self.allocated_bytes() == 0 {
+                        self.cursor_virt = self.heap_start_virt;
+                    }
+                    return Ok(());
+                }
+            }
+            index += 1;
+        }
+        Err(EarlyHeapDeallocationError::UnknownAllocation)
+    }
+
+    const fn first_free_slot(&self) -> Option<usize> {
+        let mut index = 0;
+        while index < EARLY_HEAP_MAX_ALLOCATIONS {
+            if self.allocations[index].is_none() {
+                return Some(index);
+            }
+            index += 1;
+        }
+        None
+    }
+}
+
+/// Exercises deterministic early heap allocation/deallocation operations once at boot.
+pub fn run_early_heap_alloc_cycle(
+    allocator: &mut EarlyHeapAllocator,
+) -> Result<EarlyHeapOperationCycleReport, EarlyHeapOperationError> {
+    let first = allocator
+        .allocate(0x20, 0x10)
+        .map_err(EarlyHeapOperationError::Allocation)?;
+    let second = allocator
+        .allocate(0x40, 0x20)
+        .map_err(EarlyHeapOperationError::Allocation)?;
+
+    allocator
+        .deallocate(second)
+        .map_err(EarlyHeapOperationError::Deallocation)?;
+    allocator
+        .deallocate(first)
+        .map_err(EarlyHeapOperationError::Deallocation)?;
+
+    Ok(EarlyHeapOperationCycleReport {
+        allocations: 2,
+        deallocations: 2,
+        final_cursor_virt: allocator.cursor_virt(),
+    })
+}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(transparent)]
 struct PageTableEntry(u64);
@@ -908,19 +1116,21 @@ extern crate std;
 mod tests {
     use super::{
         boot_banner_bytes, boot_banner_line_bytes, boot_entry_done_line_bytes,
-        boot_heap_bootstrap_line_bytes, boot_interrupt_init_line_bytes,
-        boot_memory_init_line_bytes, boot_paging_install_line_bytes, boot_paging_plan_line_bytes,
-        boot_panic_line_bytes, bootstrap_early_kernel_heap, dispatch_exception,
-        early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
-        early_physical_memory_map, early_translation_state_valid, exception_log_line,
-        exception_log_line_bytes, init_early_interrupts, init_early_paging_plan,
-        init_early_physical_memory, install_early_paging, is_canonical_virtual_address,
-        is_page_aligned_4k, translate_early_virtual_to_physical, EarlyFrameAllocationError,
-        EarlyFrameAllocator, EarlyHeapBootstrapError, IdtEntry, PhysicalMemoryRegionKind,
+        boot_heap_alloc_cycle_line_bytes, boot_heap_bootstrap_line_bytes,
+        boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
+        boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
+        bootstrap_early_kernel_heap, dispatch_exception, early_idt_descriptor, early_idt_entries,
+        early_paging_table_snapshot, early_physical_memory_map, early_translation_state_valid,
+        exception_log_line, exception_log_line_bytes, init_early_interrupts,
+        init_early_paging_plan, init_early_physical_memory, install_early_paging,
+        is_canonical_virtual_address, is_page_aligned_4k, run_early_heap_alloc_cycle,
+        translate_early_virtual_to_physical, EarlyFrameAllocationError, EarlyFrameAllocator,
+        EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
+        EarlyHeapDeallocationError, EarlyHeapOperationError, IdtEntry, PhysicalMemoryRegionKind,
         VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER, BOOT_BANNER_LINE,
-        BOOT_ENTRY_DONE_LINE, BOOT_HEAP_BOOTSTRAP_LINE, BOOT_INTERRUPT_INIT_LINE,
-        BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE,
-        EXCEPTION_VECTOR_COUNT,
+        BOOT_ENTRY_DONE_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
+        BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
+        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -1014,6 +1224,18 @@ mod tests {
         assert_eq!(
             boot_heap_bootstrap_line_bytes(),
             b"tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4\r\n"
+        );
+    }
+
+    #[test]
+    fn boot_heap_alloc_cycle_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_HEAP_ALLOC_CYCLE_LINE,
+            "tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000\r\n"
+        );
+        assert_eq!(
+            boot_heap_alloc_cycle_line_bytes(),
+            b"tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000\r\n"
         );
     }
 
@@ -1252,6 +1474,82 @@ mod tests {
         let err = bootstrap_early_kernel_heap(&mut allocator, invalid)
             .expect_err("heap bootstrap should reject invalid translation state");
         assert_eq!(err, EarlyHeapBootstrapError::InvalidPagingState);
+    }
+
+    #[test]
+    fn early_heap_allocator_allocate_deallocate_cycle_resets_cursor() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+        let mut frame_allocator = EarlyFrameAllocator::from_install_report(install);
+        let bootstrap = bootstrap_early_kernel_heap(&mut frame_allocator, install)
+            .expect("heap bootstrap should succeed for allocator tests");
+
+        let mut heap = EarlyHeapAllocator::from_bootstrap(bootstrap);
+        let a = heap.allocate(0x20, 0x10).expect("first alloc should pass");
+        let b = heap.allocate(0x40, 0x20).expect("second alloc should pass");
+        assert!(b.start_virt.0 >= a.start_virt.0 + a.size_bytes);
+        assert_eq!(heap.allocated_bytes(), 0x60);
+
+        heap.deallocate(b).expect("deallocate second should pass");
+        heap.deallocate(a).expect("deallocate first should pass");
+        assert_eq!(heap.allocated_bytes(), 0);
+        assert_eq!(heap.cursor_virt().0, 0x0040_0000);
+    }
+
+    #[test]
+    fn early_heap_allocator_rejects_invalid_requests_and_double_free() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+        let mut frame_allocator = EarlyFrameAllocator::from_install_report(install);
+        let bootstrap = bootstrap_early_kernel_heap(&mut frame_allocator, install)
+            .expect("heap bootstrap should succeed for allocator tests");
+
+        let mut heap = EarlyHeapAllocator::from_bootstrap(bootstrap);
+        let err = heap
+            .allocate(0, 0x8)
+            .expect_err("zero-sized allocations must be rejected");
+        assert_eq!(err, EarlyHeapAllocationError::ZeroSize);
+
+        let err = heap
+            .allocate(0x10, 3)
+            .expect_err("non-power-of-two alignments must be rejected");
+        assert_eq!(err, EarlyHeapAllocationError::InvalidAlignment);
+
+        let allocation = heap.allocate(0x10, 0x8).expect("allocation should pass");
+        heap.deallocate(allocation)
+            .expect("initial deallocation should pass");
+        let err = heap
+            .deallocate(allocation)
+            .expect_err("double free should be rejected");
+        assert_eq!(err, EarlyHeapDeallocationError::DoubleFree);
+    }
+
+    #[test]
+    fn run_early_heap_alloc_cycle_reports_expected_contract() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+        let mut frame_allocator = EarlyFrameAllocator::from_install_report(install);
+        let bootstrap = bootstrap_early_kernel_heap(&mut frame_allocator, install)
+            .expect("heap bootstrap should succeed for allocator tests");
+
+        let mut heap = EarlyHeapAllocator::from_bootstrap(bootstrap);
+        let cycle = run_early_heap_alloc_cycle(&mut heap)
+            .expect("alloc cycle should complete over deterministic heap window");
+        assert_eq!(cycle.allocations, 2);
+        assert_eq!(cycle.deallocations, 2);
+        assert_eq!(cycle.final_cursor_virt.0, 0x0040_0000);
+
+        let mut too_small = EarlyHeapAllocator::from_bootstrap(bootstrap);
+        let _ = too_small.allocate(bootstrap.heap_bytes - 0x10, 0x10);
+        let err = run_early_heap_alloc_cycle(&mut too_small)
+            .expect_err("allocation failures should surface through cycle reports");
+        assert!(matches!(
+            err,
+            EarlyHeapOperationError::Allocation(EarlyHeapAllocationError::OutOfMemory)
+        ));
     }
 
     #[test]

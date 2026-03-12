@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: kernel allocator
-- Subtask: bootstrap the first allocator-backed heap window from early paging identity mappings.
+- Subtask: materialize allocation/deallocation operations over the bootstrapped early heap window.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -32,7 +32,8 @@
 - Completed slice: fixed the boot-smoke runtime failure trigger by deferring early CR3 installation in the UEFI path until allocator-backed physical ownership is available, preventing pre-transcript faults during QEMU boot smoke.
 - Completed slice: integrated an initial allocator-facing early frame-selection API (`EarlyFrameAllocator`) that consumes paging install reports, validates translation preconditions, and returns deterministic 4KiB frame allocations with explicit error contracts.
 - Completed slice: threaded `EarlyFrameAllocator` through a first deterministic kernel-heap bootstrap path (4x4KiB at VA 0x00400000), including canonical heap bootstrap transcript contracts across kernel/UEFI/smoke checks.
-- Next slice: materialize allocation/deallocation operations over the bootstrapped heap window.
+- Completed slice: added a deterministic early-heap bump allocator with tracked allocate/deallocate operations, plus a canonical boot-time alloc-cycle contract (`allocs=2 frees=2 cursor=0x00400000`) wired through kernel tests, UEFI transcript output, and smoke checks.
+- Next slice: connect the early-heap allocator to a minimal global allocator facade for kernel-owned dynamic structures.
 
 <!-- ci-status:start -->
 ## Latest CI automation
