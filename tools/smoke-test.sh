@@ -3,14 +3,21 @@ set -euo pipefail
 
 expected_banner='tosm-os: kernel entry reached'
 expected_panic='tosm-os: panic in uefi-entry'
+expected_interrupt_init='tosm-os: idt skeleton initialized'
 expected_entry_done='tosm-os: efi_main completed'
 expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
+expected_interrupt_init_line='tosm-os: idt skeleton initialized\r\n'
 expected_entry_done_line='tosm-os: efi_main completed\r\n'
 
 contract_check() {
   if ! grep --fixed-strings --quiet -- "${expected_banner}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected boot banner not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_interrupt_init}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected interrupt-init line not found"
     exit 1
   fi
 
@@ -34,6 +41,11 @@ contract_check() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_interrupt_init_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected interrupt-init CRLF contract not found"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected efi_main completion CRLF contract not found"
     exit 1
@@ -44,7 +56,7 @@ contract_check() {
 
 screen_transcript_contract_check() {
   local transcript_tests=(
-    model_boot_transcript_renders_banner_then_done_on_distinct_rows
+    model_boot_transcript_renders_banner_then_interrupt_then_done_on_distinct_rows
     model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines
     model_init_clears_screen_and_resets_cursor
     model_newline_clears_destination_row
@@ -58,7 +70,7 @@ screen_transcript_contract_check() {
     cargo test --package uefi-entry --lib "${test_name}"
   done
 
-  echo "smoke: VGA transcript init/newline/carriage-return/wrap/ordering/scrolling contracts present"
+  echo "smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/scrolling contracts present"
 }
 
 find_ovmf_code() {
@@ -176,12 +188,17 @@ run_qemu_smoke() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_interrupt_init}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing interrupt-init line"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing completion line"
     exit 1
   fi
 
-  echo "smoke: QEMU boot output includes banner and completion line"
+  echo "smoke: QEMU boot output includes banner, interrupt-init, and completion lines"
 }
 
 contract_check
