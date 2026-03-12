@@ -49,6 +49,10 @@ pub const BOOT_GLOBAL_ALLOCATOR_READY_LINE: &str =
 pub const BOOT_GLOBAL_ALLOCATOR_PROBE_LINE: &str =
     "tosm-os: global allocator probe entries=4 checksum=0x000000000000002a\r\n";
 
+/// Canonical timer-init line emitted once deterministic early timer configuration is computed.
+pub const BOOT_TIMER_INIT_LINE: &str =
+    "tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -119,6 +123,12 @@ pub const fn boot_global_allocator_ready_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_global_allocator_probe_line_bytes() -> &'static [u8] {
     BOOT_GLOBAL_ALLOCATOR_PROBE_LINE.as_bytes()
+}
+
+/// Returns the canonical timer-init line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_timer_init_line_bytes() -> &'static [u8] {
+    BOOT_TIMER_INIT_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -289,6 +299,17 @@ pub struct GlobalAllocatorProbeReport {
     pub checksum: u64,
 }
 
+/// Deterministic timer initialization report produced during early bring-up.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyTimerInitReport {
+    pub source: &'static str,
+    pub frequency_hz: u64,
+    pub pit_input_hz: u64,
+    pub divisor: u16,
+    pub irq_vector: u8,
+    pub tick_period_ns: u64,
+}
+
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
 pub const EARLY_PAGING_FRAME_WINDOW_FRAMES: usize = 4;
 pub const EARLY_IDENTITY_MAP_PAGES_4K: usize = 512;
@@ -303,6 +324,9 @@ const PAGE_TABLE_ENTRY_ADDR_MASK: u64 = 0x000f_ffff_ffff_f000;
 const PAGE_SIZE_2M_BYTES: u64 = 0x20_0000;
 const ENTRIES_PER_PAGE_TABLE: usize = 512;
 const EARLY_PAGING_PRESENT_ENTRY_COUNT: usize = 1 + 1 + EARLY_IDENTITY_MAP_PAGES_4K;
+const PIT_INPUT_CLOCK_HZ: u64 = 1_193_182;
+const EARLY_TIMER_TARGET_HZ: u64 = 100;
+const TIMER_IRQ_VECTOR: u8 = 0x20;
 
 /// Returns true when a value is 4KiB aligned.
 #[must_use]
@@ -986,6 +1010,22 @@ pub fn install_early_paging(plan: EarlyPagingPlanReport) -> EarlyPagingInstallRe
     }
 }
 
+/// Initializes deterministic early timer configuration contracts used by boot transcript tests.
+#[must_use]
+pub fn init_early_timer() -> EarlyTimerInitReport {
+    let divisor = (PIT_INPUT_CLOCK_HZ / EARLY_TIMER_TARGET_HZ) as u16;
+    let tick_period_ns = 1_000_000_000_u64 / EARLY_TIMER_TARGET_HZ;
+
+    EarlyTimerInitReport {
+        source: "pit",
+        frequency_hz: EARLY_TIMER_TARGET_HZ,
+        pit_input_hz: PIT_INPUT_CLOCK_HZ,
+        divisor,
+        irq_vector: TIMER_IRQ_VECTOR,
+        tick_period_ns,
+    }
+}
+
 /// Number of architectural exception vectors reserved at boot.
 pub const EXCEPTION_VECTOR_COUNT: usize = 32;
 
@@ -1332,20 +1372,21 @@ mod tests {
         boot_heap_alloc_cycle_line_bytes, boot_heap_bootstrap_line_bytes,
         boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
         boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
-        bootstrap_early_kernel_heap, dispatch_exception, early_idt_descriptor, early_idt_entries,
-        early_paging_table_snapshot, early_physical_memory_map, early_translation_state_valid,
-        exception_log_line, exception_log_line_bytes, init_early_global_allocator,
-        init_early_interrupts, init_early_paging_plan, init_early_physical_memory,
-        install_early_paging, is_canonical_virtual_address, is_page_aligned_4k,
-        run_early_global_allocator_probe, run_early_heap_alloc_cycle,
-        translate_early_virtual_to_physical, EarlyFrameAllocationError, EarlyFrameAllocator,
-        EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
+        boot_timer_init_line_bytes, bootstrap_early_kernel_heap, dispatch_exception,
+        early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
+        early_physical_memory_map, early_translation_state_valid, exception_log_line,
+        exception_log_line_bytes, init_early_global_allocator, init_early_interrupts,
+        init_early_paging_plan, init_early_physical_memory, init_early_timer, install_early_paging,
+        is_canonical_virtual_address, is_page_aligned_4k, run_early_global_allocator_probe,
+        run_early_heap_alloc_cycle, translate_early_virtual_to_physical, EarlyFrameAllocationError,
+        EarlyFrameAllocator, EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
         EarlyHeapDeallocationError, EarlyHeapOperationError, GlobalAllocatorInitError, IdtEntry,
         PhysicalMemoryRegionKind, VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER,
         BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE,
         BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
         BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
-        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
+        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_TIMER_INIT_LINE, EARLY_GLOBAL_ALLOCATOR,
+        EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -1475,6 +1516,18 @@ mod tests {
         assert_eq!(
             boot_global_allocator_ready_line_bytes(),
             b"tosm-os: global allocator ready heap=0x00400000-0x00404000\r\n"
+        );
+    }
+
+    #[test]
+    fn boot_timer_init_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_TIMER_INIT_LINE,
+            "tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20\r\n"
+        );
+        assert_eq!(
+            boot_timer_init_line_bytes(),
+            b"tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20\r\n"
         );
     }
 
@@ -1928,6 +1981,17 @@ mod tests {
         assert_eq!(unknown.vector, EXCEPTION_VECTOR_COUNT as u8);
         assert!(!unknown.known_vector);
         assert_eq!(unknown.line, "tosm-os: exception vector unknown\r\n");
+    }
+
+    #[test]
+    fn init_early_timer_reports_pit_contracts() {
+        let report = init_early_timer();
+        assert_eq!(report.source, "pit");
+        assert_eq!(report.frequency_hz, 100);
+        assert_eq!(report.pit_input_hz, 1_193_182);
+        assert_eq!(report.divisor, 11_931);
+        assert_eq!(report.irq_vector, 0x20);
+        assert_eq!(report.tick_period_ns, 10_000_000);
     }
 
     #[test]

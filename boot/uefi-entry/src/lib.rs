@@ -297,6 +297,12 @@ pub const fn global_allocator_probe_message_line() -> &'static [u8] {
     kernel::boot_global_allocator_probe_line_bytes()
 }
 
+/// Returns the deterministic timer-init line expected after early timer configuration.
+#[must_use]
+pub const fn timer_init_message_line() -> &'static [u8] {
+    kernel::boot_timer_init_line_bytes()
+}
+
 /// Returns the deterministic exception line expected from early dispatch logging.
 #[must_use]
 pub fn exception_message_line(vector: u8) -> &'static [u8] {
@@ -359,6 +365,10 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         }
     }
 
+    let _timer_report = kernel::init_early_timer();
+    serial.write_all(timer_init_message_line());
+    screen.write_all(timer_init_message_line());
+
     serial.write_all(entry_done_message_line());
     screen.write_all(entry_done_message_line());
     EfiStatus::SUCCESS
@@ -391,8 +401,9 @@ mod tests {
         global_allocator_ready_message_line, heap_alloc_cycle_message_line,
         heap_bootstrap_message_line, interrupt_init_message_line, kernel_entry_message_line,
         memory_init_message_line, paging_install_message_line, paging_plan_message_line,
-        panic_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1,
-        LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
+        panic_message_line, timer_init_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400,
+        LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
+        VGA_TEXT_ROWS,
     };
 
     struct VgaWriterModel {
@@ -557,6 +568,14 @@ mod tests {
     }
 
     #[test]
+    fn timer_init_message_line_matches_kernel_canonical_timer_line() {
+        assert_eq!(
+            timer_init_message_line(),
+            b"tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20\r\n"
+        );
+    }
+
+    #[test]
     fn efi_status_success_value_is_zero() {
         assert_eq!(EfiStatus::SUCCESS.0, 0);
     }
@@ -592,6 +611,7 @@ mod tests {
         let heap_cycle_columns = heap_alloc_cycle_message_line().len();
         let global_allocator_columns = global_allocator_ready_message_line().len();
         let global_allocator_probe_columns = global_allocator_probe_message_line().len();
+        let timer_columns = timer_init_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
         assert!(panic_columns < VGA_TEXT_COLUMNS);
@@ -603,6 +623,7 @@ mod tests {
         assert!(heap_cycle_columns < VGA_TEXT_COLUMNS);
         assert!(global_allocator_columns < VGA_TEXT_COLUMNS);
         assert!(global_allocator_probe_columns < VGA_TEXT_COLUMNS);
+        assert!(timer_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
     }
 
@@ -641,9 +662,10 @@ mod tests {
         model.write_all(heap_alloc_cycle_message_line());
         model.write_all(global_allocator_ready_message_line());
         model.write_all(global_allocator_probe_message_line());
+        model.write_all(timer_init_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 11);
+        assert_eq!(model.row, 12);
         assert_eq!(model.column, 0);
         assert_eq!(
             model.row_text_without_trailing_blanks(0),
@@ -687,10 +709,14 @@ mod tests {
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(10),
+            b"tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(11),
             b"tosm-os: efi_main completed"
         );
         assert_eq!(
-            model.row_bytes(11),
+            model.row_bytes(12),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
         );
     }
@@ -707,6 +733,7 @@ mod tests {
         model.write_all(paging_install_message_line());
         model.write_all(heap_bootstrap_message_line());
         model.write_all(heap_alloc_cycle_message_line());
+        model.write_all(timer_init_message_line());
         model.write_all(entry_done_message_line());
 
         model.init_for_boot_logs();
@@ -749,6 +776,10 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
