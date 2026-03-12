@@ -1,7 +1,7 @@
 # Current milestone
 
-- Active milestone: timer support
-- Subtask: expose deterministic timer handoff primitives suitable for scheduler/threads milestone integration.
+- Active milestone: scheduler / threads
+- Subtask: establish timer-driven deterministic run-queue handoff skeleton contracts.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -39,7 +39,8 @@
 - Completed slice: implemented deterministic periodic timer tick accounting state in kernel, added canonical first-tick transcript contracts (`irq=0x20 count=1 uptime_ns=10000000`), wired first-tick emission in UEFI boot flow, and extended transcript/smoke checks to require timer-init -> timer-first-tick ordering before completion.
 - Completed slice: wired deterministic timer interrupt dispatch to pair tick accounting with PIC EOI acknowledgement contracts, then integrated canonical timer third-tick and timer-ack transcript lines across kernel/UEFI/smoke checks.
 - Completed slice: added kernel timer handoff primitives (`sample_early_timer_handoff`/`take_early_timer_handoff`) with deterministic tick-delta/uptime reports and one-way handoff watermark updates, then integrated a canonical timer-handoff transcript line across UEFI flow and smoke contracts.
-- Next slice: mark timer support milestone complete and begin scheduler/threads bootstrap contracts (timer-driven run-queue handoff skeleton).
+- Completed slice: marked timer support complete by extending the kernel with deterministic scheduler bootstrap models (`reset_early_scheduler_state`, scheduler snapshots, timer-driven scheduler handoff reports), then integrated canonical scheduler-handoff transcript contracts across UEFI flow and smoke checks.
+- Next slice: add deterministic scheduler slot mutation and simple round-robin selection contracts for first thread enqueue/dequeue modeling.
 
 <!-- ci-status:start -->
 ## Latest CI automation
