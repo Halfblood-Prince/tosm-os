@@ -309,6 +309,18 @@ pub const fn timer_first_tick_message_line() -> &'static [u8] {
     kernel::boot_timer_first_tick_line_bytes()
 }
 
+/// Returns the deterministic timer-third-tick line expected after multi-tick interrupt dispatch.
+#[must_use]
+pub const fn timer_third_tick_message_line() -> &'static [u8] {
+    kernel::boot_timer_third_tick_line_bytes()
+}
+
+/// Returns the deterministic timer-ack line expected after PIC EOI acknowledgement.
+#[must_use]
+pub const fn timer_ack_message_line() -> &'static [u8] {
+    kernel::boot_timer_ack_line_bytes()
+}
+
 /// Returns the deterministic exception line expected from early dispatch logging.
 #[must_use]
 pub fn exception_message_line(vector: u8) -> &'static [u8] {
@@ -376,9 +388,17 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
     serial.write_all(timer_init_message_line());
     screen.write_all(timer_init_message_line());
 
-    let _first_tick = kernel::record_early_timer_tick(timer_report);
+    let _first_dispatch = kernel::dispatch_early_timer_interrupt(timer_report);
     serial.write_all(timer_first_tick_message_line());
     screen.write_all(timer_first_tick_message_line());
+
+    let _second_dispatch = kernel::dispatch_early_timer_interrupt(timer_report);
+    let _third_dispatch = kernel::dispatch_early_timer_interrupt(timer_report);
+    serial.write_all(timer_third_tick_message_line());
+    screen.write_all(timer_third_tick_message_line());
+
+    serial.write_all(timer_ack_message_line());
+    screen.write_all(timer_ack_message_line());
 
     serial.write_all(entry_done_message_line());
     screen.write_all(entry_done_message_line());
@@ -412,9 +432,10 @@ mod tests {
         global_allocator_ready_message_line, heap_alloc_cycle_message_line,
         heap_bootstrap_message_line, interrupt_init_message_line, kernel_entry_message_line,
         memory_init_message_line, paging_install_message_line, paging_plan_message_line,
-        panic_message_line, timer_first_tick_message_line, timer_init_message_line, vga_cell_index,
-        EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB,
-        LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
+        panic_message_line, timer_ack_message_line, timer_first_tick_message_line,
+        timer_init_message_line, timer_third_tick_message_line, vga_cell_index, EfiStatus,
+        BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY,
+        VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
     };
 
     struct VgaWriterModel {
@@ -595,6 +616,22 @@ mod tests {
     }
 
     #[test]
+    fn timer_third_tick_message_line_matches_kernel_canonical_tick_line() {
+        assert_eq!(
+            timer_third_tick_message_line(),
+            b"tosm-os: timer tick irq=0x20 count=3 uptime_ns=30000000\r\n"
+        );
+    }
+
+    #[test]
+    fn timer_ack_message_line_matches_kernel_canonical_ack_line() {
+        assert_eq!(
+            timer_ack_message_line(),
+            b"tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20\r\n"
+        );
+    }
+
+    #[test]
     fn efi_status_success_value_is_zero() {
         assert_eq!(EfiStatus::SUCCESS.0, 0);
     }
@@ -685,9 +722,11 @@ mod tests {
         model.write_all(global_allocator_probe_message_line());
         model.write_all(timer_init_message_line());
         model.write_all(timer_first_tick_message_line());
+        model.write_all(timer_third_tick_message_line());
+        model.write_all(timer_ack_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 13);
+        assert_eq!(model.row, 15);
         assert_eq!(model.column, 0);
         assert_eq!(
             model.row_text_without_trailing_blanks(0),
@@ -739,10 +778,18 @@ mod tests {
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(12),
+            b"tosm-os: timer tick irq=0x20 count=3 uptime_ns=30000000"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(13),
+            b"tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(14),
             b"tosm-os: efi_main completed"
         );
         assert_eq!(
-            model.row_bytes(13),
+            model.row_bytes(15),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
         );
     }
@@ -761,6 +808,8 @@ mod tests {
         model.write_all(heap_alloc_cycle_message_line());
         model.write_all(timer_init_message_line());
         model.write_all(timer_first_tick_message_line());
+        model.write_all(timer_third_tick_message_line());
+        model.write_all(timer_ack_message_line());
         model.write_all(entry_done_message_line());
 
         model.init_for_boot_logs();
@@ -807,6 +856,14 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: timer tick irq=0x20 count=3 uptime_ns=30000000"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),

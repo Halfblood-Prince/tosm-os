@@ -37,7 +37,8 @@
 - Completed slice: routed a first kernel-owned dynamic structure through the global allocator facade with deterministic probe contracts (`entries=4 checksum=0x2a`) wired across kernel/UEFI/smoke checks and tests, validating end-to-end allocate/use/free behavior in boot flow.
 - Completed slice: added deterministic early PIT timer contracts (source/frequency/divisor/IRQ/tick-period), integrated canonical timer-init serial/VGA transcript output into UEFI entry flow, and extended kernel/UEFI/smoke contract checks to enforce the new timer line before boot completion.
 - Completed slice: implemented deterministic periodic timer tick accounting state in kernel, added canonical first-tick transcript contracts (`irq=0x20 count=1 uptime_ns=10000000`), wired first-tick emission in UEFI boot flow, and extended transcript/smoke checks to require timer-init -> timer-first-tick ordering before completion.
-- Next slice: wire timer tick acknowledgements through early interrupt dispatch path and expose multi-tick transcript coverage for scheduler handoff.
+- Completed slice: wired deterministic timer interrupt dispatch to pair tick accounting with PIC EOI acknowledgement contracts, then integrated canonical timer third-tick and timer-ack transcript lines across kernel/UEFI/smoke checks.
+- Next slice: expose timer dispatch state handoff primitives suitable for scheduler/threads milestone integration.
 
 <!-- ci-status:start -->
 ## Latest CI automation
