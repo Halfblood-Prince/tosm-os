@@ -16,6 +16,7 @@
 ## Progress update
 
 - Completed slice: added a kernel-owned x86_64 IDT skeleton model for the first 32 exception vectors, a boot interrupt-init serial line contract, and UEFI boot-path wiring that initializes early interrupts between banner and completion output; smoke + host transcript tests now enforce this ordering.
+- Maintenance update: fixed the CI Clippy blocker by routing early exception handler address capture through an explicit function-pointer-to-raw-pointer conversion helper so `-D warnings` no longer fails on `function-casts-as-integer`.
 - Next slice: replace the shared spin-loop exception stub with vector-specific deterministic handlers and add first exception logging coverage.
 
 <!-- ci-status:start -->
