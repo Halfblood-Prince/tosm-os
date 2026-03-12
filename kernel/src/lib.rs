@@ -134,6 +134,24 @@ pub struct EarlyPagingInstallReport {
     pub installed_into_cpu: bool,
 }
 
+/// Newtype representing a canonical virtual address.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(transparent)]
+pub struct VirtualAddress(pub u64);
+
+/// Newtype representing a physical address.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(transparent)]
+pub struct PhysicalAddress(pub u64);
+
+/// Errors returned by early virtual-to-physical translation helpers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VirtualAddressTranslationError {
+    NonCanonicalAddress,
+    UnmappedAddress,
+    InvalidPagingState,
+}
+
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
 pub const EARLY_PAGING_FRAME_WINDOW_FRAMES: usize = 4;
 pub const EARLY_IDENTITY_MAP_PAGES_4K: usize = 512;
@@ -145,6 +163,54 @@ const PAGE_TABLE_ENTRY_ADDR_MASK: u64 = 0x000f_ffff_ffff_f000;
 const PAGE_SIZE_2M_BYTES: u64 = 0x20_0000;
 const ENTRIES_PER_PAGE_TABLE: usize = 512;
 const EARLY_PAGING_PRESENT_ENTRY_COUNT: usize = 1 + 1 + EARLY_IDENTITY_MAP_PAGES_4K;
+
+/// Returns true when a value is 4KiB aligned.
+#[must_use]
+pub const fn is_page_aligned_4k(addr: u64) -> bool {
+    (addr & (PAGE_SIZE_4K_BYTES - 1)) == 0
+}
+
+/// Returns true if the provided x86_64 virtual address is canonical.
+#[must_use]
+pub const fn is_canonical_virtual_address(addr: u64) -> bool {
+    let sign_bit = (addr >> 47) & 1;
+    let upper = addr >> 48;
+    if sign_bit == 0 {
+        upper == 0
+    } else {
+        upper == 0xFFFF
+    }
+}
+
+/// Validates the minimal invariants required for deterministic early translation helpers.
+#[must_use]
+pub const fn early_translation_state_valid(report: EarlyPagingInstallReport) -> bool {
+    is_page_aligned_4k(report.root_table_phys_addr)
+        && is_page_aligned_4k(report.pdpt_phys_addr)
+        && is_page_aligned_4k(report.pd_phys_addr)
+        && report.mapped_span_bytes != 0
+        && report.present_entry_count >= 3
+}
+
+/// Translates a canonical virtual address through the deterministic early identity map.
+pub fn translate_early_virtual_to_physical(
+    virt: VirtualAddress,
+    report: EarlyPagingInstallReport,
+) -> Result<PhysicalAddress, VirtualAddressTranslationError> {
+    if !early_translation_state_valid(report) {
+        return Err(VirtualAddressTranslationError::InvalidPagingState);
+    }
+
+    if !is_canonical_virtual_address(virt.0) {
+        return Err(VirtualAddressTranslationError::NonCanonicalAddress);
+    }
+
+    if virt.0 >= report.mapped_span_bytes {
+        return Err(VirtualAddressTranslationError::UnmappedAddress);
+    }
+
+    Ok(PhysicalAddress(virt.0))
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(transparent)]
@@ -695,10 +761,12 @@ mod tests {
         boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
         boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
         dispatch_exception, early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
-        early_physical_memory_map, exception_log_line, exception_log_line_bytes,
-        init_early_interrupts, init_early_paging_plan, init_early_physical_memory,
-        install_early_paging, IdtEntry, PhysicalMemoryRegionKind, BOOT_BANNER, BOOT_BANNER_LINE,
-        BOOT_ENTRY_DONE_LINE, BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE,
+        early_physical_memory_map, early_translation_state_valid, exception_log_line,
+        exception_log_line_bytes, init_early_interrupts, init_early_paging_plan,
+        init_early_physical_memory, install_early_paging, is_canonical_virtual_address,
+        is_page_aligned_4k, translate_early_virtual_to_physical, IdtEntry,
+        PhysicalMemoryRegionKind, VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER,
+        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE,
         BOOT_PAGING_INSTALL_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
     };
 
@@ -850,6 +918,73 @@ mod tests {
         assert_eq!(pd[511], 0x0000_0000_3fe0_0083);
         assert_eq!(root[1], 0);
         assert_eq!(pdpt[1], 0);
+    }
+
+    #[test]
+    fn canonical_virtual_address_guard_accepts_lower_and_higher_halves() {
+        assert!(is_canonical_virtual_address(0x0000_0000_0000_0000));
+        assert!(is_canonical_virtual_address(0x0000_7fff_ffff_ffff));
+        assert!(is_canonical_virtual_address(0xffff_8000_0000_0000));
+        assert!(is_canonical_virtual_address(0xffff_ffff_ffff_ffff));
+        assert!(!is_canonical_virtual_address(0x0000_8000_0000_0000));
+        assert!(!is_canonical_virtual_address(0xffff_7fff_ffff_ffff));
+    }
+
+    #[test]
+    fn page_alignment_guard_detects_4k_boundaries() {
+        assert!(is_page_aligned_4k(0x0000_0000_0010_0000));
+        assert!(is_page_aligned_4k(0x0000_0000_3f7e_d000));
+        assert!(!is_page_aligned_4k(0x0000_0000_3f7e_d001));
+    }
+
+    #[test]
+    fn early_translation_state_guard_rejects_invalid_reports() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+        assert!(early_translation_state_valid(install));
+
+        let mut bad = install;
+        bad.root_table_phys_addr += 1;
+        assert!(!early_translation_state_valid(bad));
+
+        bad = install;
+        bad.mapped_span_bytes = 0;
+        assert!(!early_translation_state_valid(bad));
+    }
+
+    #[test]
+    fn early_virtual_translation_maps_identity_range_and_rejects_out_of_range() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+
+        let phys = translate_early_virtual_to_physical(VirtualAddress(0x0012_3456), install)
+            .expect("identity-mapped early address should translate");
+        assert_eq!(phys.0, 0x0012_3456);
+
+        let err =
+            translate_early_virtual_to_physical(VirtualAddress(0x0000_0001_0000_0000), install)
+                .expect_err("address beyond mapped span should be rejected");
+        assert_eq!(err, VirtualAddressTranslationError::UnmappedAddress);
+    }
+
+    #[test]
+    fn early_virtual_translation_rejects_noncanonical_and_invalid_state() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+
+        let err =
+            translate_early_virtual_to_physical(VirtualAddress(0x0000_8000_0000_0000), install)
+                .expect_err("non-canonical address should be rejected");
+        assert_eq!(err, VirtualAddressTranslationError::NonCanonicalAddress);
+
+        let mut bad = install;
+        bad.pdpt_phys_addr += 1;
+        let err = translate_early_virtual_to_physical(VirtualAddress(0), bad)
+            .expect_err("invalid paging state should be rejected");
+        assert_eq!(err, VirtualAddressTranslationError::InvalidPagingState);
     }
 
     #[test]
