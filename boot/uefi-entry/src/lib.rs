@@ -364,6 +364,15 @@ mod tests {
         fn row_bytes(&self, row: usize) -> [u8; VGA_TEXT_COLUMNS] {
             self.cells[row]
         }
+
+        fn row_text_prefix(&self, row: usize) -> &[u8] {
+            let row_bytes = &self.cells[row];
+            let end = row_bytes
+                .iter()
+                .position(|byte| *byte == Self::BLANK)
+                .unwrap_or(VGA_TEXT_COLUMNS);
+            &row_bytes[..end]
+        }
     }
 
     #[test]
@@ -435,6 +444,48 @@ mod tests {
         assert_eq!(model.row, 1);
         assert_eq!(model.column, 0);
         assert_eq!(model.row_bytes(0), expected);
+        assert_eq!(
+            model.row_bytes(1),
+            [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
+        );
+    }
+
+    #[test]
+    fn model_boot_transcript_renders_banner_then_done_on_distinct_rows() {
+        let mut model = VgaWriterModel::new();
+        model.init_for_boot_logs();
+
+        model.write_all(kernel_entry_message_line());
+        model.write_all(entry_done_message_line());
+
+        assert_eq!(model.row, 2);
+        assert_eq!(model.column, 0);
+        assert_eq!(model.row_text_prefix(0), b"tosm-os: kernel entry reached");
+        assert_eq!(model.row_text_prefix(1), b"tosm-os: efi_main completed");
+        assert_eq!(
+            model.row_bytes(2),
+            [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
+        );
+    }
+
+    #[test]
+    fn model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines() {
+        let mut model = VgaWriterModel::new();
+        model.init_for_boot_logs();
+        model.write_all(kernel_entry_message_line());
+        model.write_all(entry_done_message_line());
+
+        model.init_for_boot_logs();
+        model.write_all(panic_message_line());
+
+        assert_eq!(model.row, 1);
+        assert_eq!(model.column, 0);
+        assert_eq!(model.row_text_prefix(0), b"tosm-os: panic in uefi-entry");
+        assert_ne!(
+            model.row_text_prefix(0),
+            b"tosm-os: kernel entry reached"
+        );
+        assert_ne!(model.row_text_prefix(0), b"tosm-os: efi_main completed");
         assert_eq!(
             model.row_bytes(1),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
