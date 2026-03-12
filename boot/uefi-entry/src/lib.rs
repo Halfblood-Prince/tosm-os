@@ -104,6 +104,12 @@ impl VgaTextWriter {
         }
     }
 
+    fn init_for_boot_logs(&mut self) {
+        self.clear_screen();
+        self.column = 0;
+        self.row = 0;
+    }
+
     fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => {
@@ -125,7 +131,36 @@ impl VgaTextWriter {
 
     fn new_line(&mut self) {
         self.column = 0;
-        self.row = (self.row + 1) % VGA_TEXT_ROWS;
+        if self.row + 1 < VGA_TEXT_ROWS {
+            self.row += 1;
+        } else {
+            self.scroll_up_one_row();
+        }
+        self.clear_row(self.row);
+    }
+
+    fn clear_screen(&mut self) {
+        for row in 0..VGA_TEXT_ROWS {
+            self.clear_row(row);
+        }
+    }
+
+    fn clear_row(&mut self, row: usize) {
+        for column in 0..VGA_TEXT_COLUMNS {
+            let index = vga_cell_index(row, column);
+            write_vga_cell(index, b' ', self.color);
+        }
+    }
+
+    fn scroll_up_one_row(&mut self) {
+        for row in 1..VGA_TEXT_ROWS {
+            for column in 0..VGA_TEXT_COLUMNS {
+                let from = vga_cell_index(row, column);
+                let to = vga_cell_index(row - 1, column);
+                let (ascii, color) = read_vga_cell(from);
+                write_vga_cell(to, ascii, color);
+            }
+        }
     }
 }
 
@@ -142,6 +177,19 @@ fn write_vga_cell(index: usize, ascii: u8, color: u8) {
     unsafe {
         core::ptr::write_volatile(base_ptr.add(byte_offset), ascii);
         core::ptr::write_volatile(base_ptr.add(byte_offset + 1), color);
+    }
+}
+
+#[must_use]
+fn read_vga_cell(index: usize) -> (u8, u8) {
+    let byte_offset = index.saturating_mul(2);
+    let base_ptr = VGA_TEXT_BUFFER_PHYS_ADDR as *const u8;
+    // SAFETY: VGA text mode exposes a memory-mapped character buffer at physical address
+    // 0xB8000; this reads one character byte + one color byte at a validated in-range offset.
+    unsafe {
+        let ascii = core::ptr::read_volatile(base_ptr.add(byte_offset));
+        let color = core::ptr::read_volatile(base_ptr.add(byte_offset + 1));
+        (ascii, color)
     }
 }
 
@@ -208,6 +256,7 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
     let mut serial = SerialCom1::new();
     let mut screen = VgaTextWriter::new();
     serial.init();
+    screen.init_for_boot_logs();
     serial.write_all(kernel_entry_message_line());
     screen.write_all(kernel_entry_message_line());
     serial.write_all(entry_done_message_line());
@@ -281,5 +330,13 @@ mod tests {
         assert_eq!(vga_cell_index(0, 0), 0);
         assert_eq!(vga_cell_index(0, 1), 1);
         assert_eq!(vga_cell_index(1, 0), VGA_TEXT_COLUMNS);
+    }
+
+    #[test]
+    fn line_messages_fit_without_row_wrap() {
+        let banner_columns = kernel_entry_message_line().len();
+        let done_columns = entry_done_message_line().len();
+        assert!(banner_columns < VGA_TEXT_COLUMNS);
+        assert!(done_columns < VGA_TEXT_COLUMNS);
     }
 }
