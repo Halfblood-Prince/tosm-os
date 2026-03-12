@@ -21,7 +21,8 @@
 - Completed slice: extended host transcript/smoke contracts so boot output ordering now enforces banner -> idt init -> exception vector 14 -> completion.
 - Completed slice: added a deterministic early physical-memory map model in `kernel` with stable region classification and totals reporting (usable/reserved/highest usable end), plus canonical CRLF memory-init serial contracts.
 - Completed slice: integrated memory-init reporting into UEFI boot transcript output and smoke/QEMU contract checks so boot ordering is now banner -> idt init -> exception vector 14 -> memory init -> completion.
-- Next slice: use the deterministic memory model to start paging bootstrap decisions (frame-window selection and initial mapping plan contracts).
+- Completed slice: added a deterministic early paging bootstrap planning contract derived from physical memory totals (4-frame top-of-usable window + 2MiB identity-map span), and integrated paging-plan serial/VGA/smoke ordering checks.
+- Next slice: materialize the paging plan into minimal page-table structures and early mapping install hooks.
 
 <!-- ci-status:start -->
 ## Latest CI automation
