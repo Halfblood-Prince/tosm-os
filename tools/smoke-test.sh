@@ -42,6 +42,14 @@ contract_check() {
   echo "smoke: serial message contracts present"
 }
 
+screen_transcript_contract_check() {
+  cargo test --package uefi-entry --lib \
+    model_boot_transcript_renders_banner_then_done_on_distinct_rows
+  cargo test --package uefi-entry --lib \
+    model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines
+  echo "smoke: VGA transcript ordering contracts present"
+}
+
 find_ovmf_code() {
   local candidate
   for candidate in \
@@ -166,6 +174,7 @@ run_qemu_smoke() {
 }
 
 contract_check
+screen_transcript_contract_check
 qemu_status=0
 run_qemu_smoke || qemu_status=$?
 if [[ "${qemu_status}" -ne 0 && "${qemu_status}" -ne 2 ]]; then
