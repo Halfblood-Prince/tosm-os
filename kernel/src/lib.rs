@@ -31,6 +31,10 @@ pub const BOOT_PAGING_PLAN_LINE: &str =
 pub const BOOT_PAGING_INSTALL_LINE: &str =
     "tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514\r\n";
 
+/// Canonical heap-bootstrap line emitted after allocator-backed heap bring-up is initialized.
+pub const BOOT_HEAP_BOOTSTRAP_LINE: &str =
+    "tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -77,6 +81,12 @@ pub const fn boot_paging_plan_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_paging_install_line_bytes() -> &'static [u8] {
     BOOT_PAGING_INSTALL_LINE.as_bytes()
+}
+
+/// Returns the canonical heap-bootstrap line (including CRLF) for serial transmitters.
+#[must_use]
+pub const fn boot_heap_bootstrap_line_bytes() -> &'static [u8] {
+    BOOT_HEAP_BOOTSTRAP_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -161,9 +171,30 @@ pub enum EarlyFrameAllocationError {
     OutOfFrames,
 }
 
+/// Errors returned while building the first allocator-backed kernel heap bootstrap.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyHeapBootstrapError {
+    InvalidPagingState,
+    NonCanonicalAddress,
+    UnmappedAddress,
+    OutOfFrames,
+}
+
+/// Deterministic report describing the first kernel-heap bootstrap reservation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyHeapBootstrapReport {
+    pub heap_start_virt: VirtualAddress,
+    pub heap_end_exclusive_virt: VirtualAddress,
+    pub heap_frame_start: PhysicalAddress,
+    pub heap_frame_count: usize,
+    pub heap_bytes: u64,
+}
+
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
 pub const EARLY_PAGING_FRAME_WINDOW_FRAMES: usize = 4;
 pub const EARLY_IDENTITY_MAP_PAGES_4K: usize = 512;
+pub const EARLY_HEAP_START_VIRT: u64 = 0x0040_0000;
+pub const EARLY_HEAP_FRAME_COUNT: usize = 4;
 
 const PAGE_TABLE_ENTRY_PRESENT: u64 = 1 << 0;
 const PAGE_TABLE_ENTRY_WRITABLE: u64 = 1 << 1;
@@ -290,6 +321,49 @@ impl EarlyFrameAllocator {
             translated_phys,
         })
     }
+}
+
+/// Reserves the first allocator-backed kernel heap window from deterministic early frame state.
+pub fn bootstrap_early_kernel_heap(
+    allocator: &mut EarlyFrameAllocator,
+    report: EarlyPagingInstallReport,
+) -> Result<EarlyHeapBootstrapReport, EarlyHeapBootstrapError> {
+    let mut first_frame_start = None;
+    let mut index = 0;
+    while index < EARLY_HEAP_FRAME_COUNT {
+        let requested_virt =
+            VirtualAddress(EARLY_HEAP_START_VIRT + (index as u64) * PAGE_SIZE_4K_BYTES);
+        let allocation = match allocator.allocate_for_virtual(requested_virt, report) {
+            Ok(allocation) => allocation,
+            Err(EarlyFrameAllocationError::InvalidPagingState) => {
+                return Err(EarlyHeapBootstrapError::InvalidPagingState)
+            }
+            Err(EarlyFrameAllocationError::NonCanonicalAddress) => {
+                return Err(EarlyHeapBootstrapError::NonCanonicalAddress)
+            }
+            Err(EarlyFrameAllocationError::UnmappedAddress) => {
+                return Err(EarlyHeapBootstrapError::UnmappedAddress)
+            }
+            Err(EarlyFrameAllocationError::OutOfFrames) => {
+                return Err(EarlyHeapBootstrapError::OutOfFrames)
+            }
+        };
+
+        if first_frame_start.is_none() {
+            first_frame_start = Some(allocation.frame_start);
+        }
+
+        index += 1;
+    }
+
+    let heap_bytes = (EARLY_HEAP_FRAME_COUNT as u64) * PAGE_SIZE_4K_BYTES;
+    Ok(EarlyHeapBootstrapReport {
+        heap_start_virt: VirtualAddress(EARLY_HEAP_START_VIRT),
+        heap_end_exclusive_virt: VirtualAddress(EARLY_HEAP_START_VIRT + heap_bytes),
+        heap_frame_start: first_frame_start.unwrap_or(PhysicalAddress(0)),
+        heap_frame_count: EARLY_HEAP_FRAME_COUNT,
+        heap_bytes,
+    })
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -834,17 +908,19 @@ extern crate std;
 mod tests {
     use super::{
         boot_banner_bytes, boot_banner_line_bytes, boot_entry_done_line_bytes,
-        boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
-        boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
-        dispatch_exception, early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
+        boot_heap_bootstrap_line_bytes, boot_interrupt_init_line_bytes,
+        boot_memory_init_line_bytes, boot_paging_install_line_bytes, boot_paging_plan_line_bytes,
+        boot_panic_line_bytes, bootstrap_early_kernel_heap, dispatch_exception,
+        early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
         early_physical_memory_map, early_translation_state_valid, exception_log_line,
         exception_log_line_bytes, init_early_interrupts, init_early_paging_plan,
         init_early_physical_memory, install_early_paging, is_canonical_virtual_address,
         is_page_aligned_4k, translate_early_virtual_to_physical, EarlyFrameAllocationError,
-        EarlyFrameAllocator, IdtEntry, PhysicalMemoryRegionKind, VirtualAddress,
-        VirtualAddressTranslationError, BOOT_BANNER, BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE,
-        BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
-        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
+        EarlyFrameAllocator, EarlyHeapBootstrapError, IdtEntry, PhysicalMemoryRegionKind,
+        VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER, BOOT_BANNER_LINE,
+        BOOT_ENTRY_DONE_LINE, BOOT_HEAP_BOOTSTRAP_LINE, BOOT_INTERRUPT_INIT_LINE,
+        BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE,
+        EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -926,6 +1002,18 @@ mod tests {
         assert_eq!(
             boot_paging_install_line_bytes(),
             b"tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514\r\n"
+        );
+    }
+
+    #[test]
+    fn boot_heap_bootstrap_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_HEAP_BOOTSTRAP_LINE,
+            "tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4\r\n"
+        );
+        assert_eq!(
+            boot_heap_bootstrap_line_bytes(),
+            b"tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4\r\n"
         );
     }
 
@@ -1124,6 +1212,46 @@ mod tests {
             .allocate_for_virtual(VirtualAddress(0), install)
             .expect_err("allocator should reject allocations beyond frame span");
         assert_eq!(err, EarlyFrameAllocationError::OutOfFrames);
+    }
+
+    #[test]
+    fn early_heap_bootstrap_reserves_expected_window_and_frames() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+        let mut allocator = EarlyFrameAllocator::from_install_report(install);
+
+        let heap = bootstrap_early_kernel_heap(&mut allocator, install)
+            .expect("heap bootstrap should succeed over deterministic frame window");
+
+        assert_eq!(heap.heap_start_virt.0, 0x0040_0000);
+        assert_eq!(heap.heap_end_exclusive_virt.0, 0x0040_4000);
+        assert_eq!(heap.heap_frame_start.0, 0);
+        assert_eq!(heap.heap_frame_count, 4);
+        assert_eq!(heap.heap_bytes, 0x4000);
+        assert_eq!(allocator.next_frame_start(), 0x4000);
+    }
+
+    #[test]
+    fn early_heap_bootstrap_propagates_frame_allocator_errors() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+
+        let mut exhausted = EarlyFrameAllocator {
+            next_frame_start: install.mapped_span_bytes,
+            end_exclusive: install.mapped_span_bytes,
+        };
+        let err = bootstrap_early_kernel_heap(&mut exhausted, install)
+            .expect_err("heap bootstrap should fail when no frames are available");
+        assert_eq!(err, EarlyHeapBootstrapError::OutOfFrames);
+
+        let mut allocator = EarlyFrameAllocator::from_install_report(install);
+        let mut invalid = install;
+        invalid.root_table_phys_addr = 0x1234;
+        let err = bootstrap_early_kernel_heap(&mut allocator, invalid)
+            .expect_err("heap bootstrap should reject invalid translation state");
+        assert_eq!(err, EarlyHeapBootstrapError::InvalidPagingState);
     }
 
     #[test]

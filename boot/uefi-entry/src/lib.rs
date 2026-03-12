@@ -273,6 +273,12 @@ pub const fn paging_install_message_line() -> &'static [u8] {
     kernel::boot_paging_install_line_bytes()
 }
 
+/// Returns the deterministic heap-bootstrap line expected after frame-backed heap reservation.
+#[must_use]
+pub const fn heap_bootstrap_message_line() -> &'static [u8] {
+    kernel::boot_heap_bootstrap_line_bytes()
+}
+
 /// Returns the deterministic exception line expected from early dispatch logging.
 #[must_use]
 pub fn exception_message_line(vector: u8) -> &'static [u8] {
@@ -306,9 +312,16 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
     serial.write_all(paging_plan_message_line());
     screen.write_all(paging_plan_message_line());
 
-    let _paging_install_report = kernel::install_early_paging(paging_plan);
+    let paging_install_report = kernel::install_early_paging(paging_plan);
     serial.write_all(paging_install_message_line());
     screen.write_all(paging_install_message_line());
+
+    let mut frame_allocator =
+        kernel::EarlyFrameAllocator::from_install_report(paging_install_report);
+    if kernel::bootstrap_early_kernel_heap(&mut frame_allocator, paging_install_report).is_ok() {
+        serial.write_all(heap_bootstrap_message_line());
+        screen.write_all(heap_bootstrap_message_line());
+    }
 
     serial.write_all(entry_done_message_line());
     screen.write_all(entry_done_message_line());
@@ -338,11 +351,11 @@ mod tests {
     use core::array;
 
     use super::{
-        entry_done_message_line, exception_message_line, interrupt_init_message_line,
-        kernel_entry_message_line, memory_init_message_line, paging_install_message_line,
-        paging_plan_message_line, panic_message_line, vga_cell_index, EfiStatus,
-        BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY,
-        VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
+        entry_done_message_line, exception_message_line, heap_bootstrap_message_line,
+        interrupt_init_message_line, kernel_entry_message_line, memory_init_message_line,
+        paging_install_message_line, paging_plan_message_line, panic_message_line, vga_cell_index,
+        EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB,
+        LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
     };
 
     struct VgaWriterModel {
@@ -483,6 +496,14 @@ mod tests {
     }
 
     #[test]
+    fn heap_bootstrap_message_line_matches_kernel_canonical_heap_bootstrap_line() {
+        assert_eq!(
+            heap_bootstrap_message_line(),
+            b"tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4\r\n"
+        );
+    }
+
+    #[test]
     fn efi_status_success_value_is_zero() {
         assert_eq!(EfiStatus::SUCCESS.0, 0);
     }
@@ -514,6 +535,7 @@ mod tests {
         let memory_columns = memory_init_message_line().len();
         let paging_plan_columns = paging_plan_message_line().len();
         let paging_install_columns = paging_install_message_line().len();
+        let heap_columns = heap_bootstrap_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
         assert!(panic_columns < VGA_TEXT_COLUMNS);
@@ -521,6 +543,7 @@ mod tests {
         assert!(memory_columns < VGA_TEXT_COLUMNS);
         assert!(paging_plan_columns < VGA_TEXT_COLUMNS);
         assert!(paging_install_columns < VGA_TEXT_COLUMNS);
+        assert!(heap_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
     }
 
@@ -555,9 +578,10 @@ mod tests {
         model.write_all(memory_init_message_line());
         model.write_all(paging_plan_message_line());
         model.write_all(paging_install_message_line());
+        model.write_all(heap_bootstrap_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 7);
+        assert_eq!(model.row, 8);
         assert_eq!(model.column, 0);
         assert_eq!(
             model.row_text_without_trailing_blanks(0),
@@ -585,10 +609,14 @@ mod tests {
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(6),
+            b"tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(7),
             b"tosm-os: efi_main completed"
         );
         assert_eq!(
-            model.row_bytes(7),
+            model.row_bytes(8),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
         );
     }
@@ -603,6 +631,7 @@ mod tests {
         model.write_all(memory_init_message_line());
         model.write_all(paging_plan_message_line());
         model.write_all(paging_install_message_line());
+        model.write_all(heap_bootstrap_message_line());
         model.write_all(entry_done_message_line());
 
         model.init_for_boot_logs();
@@ -637,6 +666,10 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
