@@ -1,3 +1,3 @@
-# boot-smoke.md
+# Boot smoke report
 
-Report artifact was not found for the latest CI run.
+- Smoke test: success

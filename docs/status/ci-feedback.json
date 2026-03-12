@@ -1,19 +1,19 @@
 {
   "workflow": "CI",
-  "run_id": "23009691776",
+  "run_id": "23009668193",
   "run_attempt": "1",
   "conclusion": "cancelled",
   "head_branch": "main",
-  "head_sha": "5876c82cdf030c00c17d8df9b0bfd376b6d989cb",
+  "head_sha": "78ac79e3bcf1a25cd3d55e5d9d8741cd65692778",
   "event": "push",
-  "run_url": "https://github.com/Halfblood-Prince/tosm-os/actions/runs/23009691776",
-  "updated_at": "2026-03-12T15:26:57Z",
+  "run_url": "https://github.com/Halfblood-Prince/tosm-os/actions/runs/23009668193",
+  "updated_at": "2026-03-12T15:27:57Z",
   "job_results": {
-    "format": "unknown",
-    "clippy": "unknown",
-    "tests": "unknown",
-    "build": "unknown",
-    "smoke": "unknown"
+    "format": "success",
+    "clippy": "success",
+    "tests": "cancelled",
+    "build": "skipped",
+    "smoke": "success"
   },
   "codex_next_action": "fix the smallest concrete failure from the latest CI excerpts before adding new scope",
   "reports": {

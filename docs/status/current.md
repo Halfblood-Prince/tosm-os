@@ -22,8 +22,8 @@
 ## Latest CI automation
 
 - Last CI conclusion: cancelled
-- Last CI run: `23009691776`
-- Last tested commit: `5876c82cdf030c00c17d8df9b0bfd376b6d989cb`
+- Last CI run: `23009668193`
+- Last tested commit: `78ac79e3bcf1a25cd3d55e5d9d8741cd65692778`
 - Recommended next action for Codex: fix the smallest concrete failure from the latest CI excerpts before adding new scope
 - Detailed summary: `docs/status/latest-ci.md`
 <!-- ci-status:end -->
