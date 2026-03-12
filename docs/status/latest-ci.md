@@ -3,12 +3,12 @@
 - Workflow: CI
 - Conclusion: success
 - Branch: main
-- Commit: `b285d1daa909adcc8a522dd80f7b2c59c73b8f96`
-- Run ID: 22998023620
+- Commit: `258a9673900d095c09319dd4c173ba48c83c8f25`
+- Run ID: 22998341478
 - Run attempt: 1
 - Event: push
-- Updated at: 2026-03-12T10:43:51Z
-- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/22998023620
+- Updated at: 2026-03-12T10:52:04Z
+- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/22998341478
 
 ## Job results
 
@@ -38,7 +38,7 @@ Recommended next action: **continue the next unfinished milestone slice; do not 
 - `tests`: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustdoc --edition=2021 --crate-type lib --color always --crate-name uefi_entry --test boot/uefi-entry/src/lib.rs --test-run-directory /home/runner/work/tosm-os/tosm-os/boot/uefi-entry --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps -C embed-bitcode=no --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' --error-format human`
 - `tests`: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-- `smoke`: smoke: boot banner, panic, and completion contracts present
+- `smoke`: smoke: boot banner, panic, completion, and CRLF contracts present
 
 ## Stored reports
 
