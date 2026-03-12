@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: serial and screen output
-- Subtask: fix CI-reported VGA transcript ordering assertions that truncated canonical lines at the first internal blank
-- Status: completed (replaced first-blank prefix extraction with trailing-blank trimming so transcript assertions preserve internal spaces and align with canonical literals)
+- Subtask: enforce canonical boot-screen transcript ordering contracts in smoke automation so CI checks row-ordering semantics in addition to literal message presence
+- Status: completed (smoke automation now executes targeted host tests that assert deterministic VGA boot and panic transcript ordering contracts before QEMU runtime checks)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: fixed CI format+test failures by replacing the VGA test helper's first-blank prefix extraction with trailing-blank trimming and updating transcript assertions to compare full canonical row text (including internal spaces).
-- Next slice: enforce canonical boot-screen transcript contracts in smoke automation so CI validates line ordering semantics in addition to literal presence checks once this CI repair lands and reruns.
+- Completed slice: extended `tools/smoke-test.sh` with a dedicated screen transcript contract phase that runs targeted `uefi-entry` model tests for boot-line ordering and panic-path reinitialization invariants, then reports an explicit VGA contract success marker.
+- Next slice: add smoke automation coverage for VGA transcript scrolling behavior so CI enforces deterministic last-row lifecycle semantics alongside boot/panic row-order guarantees.
 
 <!-- ci-status:start -->
 ## Latest CI automation
