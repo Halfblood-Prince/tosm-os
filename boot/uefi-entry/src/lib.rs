@@ -125,7 +125,10 @@ mod tests {
 
     #[test]
     fn entry_message_line_matches_kernel_banner_with_crlf() {
-        assert_eq!(kernel_entry_message_line(), b"tosm-os: kernel entry reached\r\n");
+        assert_eq!(
+            kernel_entry_message_line(),
+            b"tosm-os: kernel entry reached\r\n"
+        );
     }
 
     #[test]

@@ -39,6 +39,9 @@ mod tests {
     #[test]
     fn boot_banner_line_bytes_include_crlf() {
         assert_eq!(BOOT_BANNER_LINE, "tosm-os: kernel entry reached\r\n");
-        assert_eq!(boot_banner_line_bytes(), b"tosm-os: kernel entry reached\r\n");
+        assert_eq!(
+            boot_banner_line_bytes(),
+            b"tosm-os: kernel entry reached\r\n"
+        );
     }
 }
