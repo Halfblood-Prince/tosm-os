@@ -243,6 +243,12 @@ pub const fn panic_message_line() -> &'static [u8] {
     kernel::boot_panic_line_bytes()
 }
 
+/// Returns the deterministic interrupt-init line expected once early IDT setup is wired.
+#[must_use]
+pub const fn interrupt_init_message_line() -> &'static [u8] {
+    kernel::boot_interrupt_init_line_bytes()
+}
+
 /// Returns the deterministic completion line expected before firmware returns success.
 #[must_use]
 pub const fn entry_done_message_line() -> &'static [u8] {
@@ -259,6 +265,11 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
     screen.init_for_boot_logs();
     serial.write_all(kernel_entry_message_line());
     screen.write_all(kernel_entry_message_line());
+
+    let _interrupt_report = kernel::init_early_interrupts();
+    serial.write_all(interrupt_init_message_line());
+    screen.write_all(interrupt_init_message_line());
+
     serial.write_all(entry_done_message_line());
     screen.write_all(entry_done_message_line());
     EfiStatus::SUCCESS
@@ -287,9 +298,9 @@ mod tests {
     use core::array;
 
     use super::{
-        entry_done_message_line, kernel_entry_message_line, panic_message_line, vga_cell_index,
-        EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB,
-        LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
+        entry_done_message_line, interrupt_init_message_line, kernel_entry_message_line,
+        panic_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1,
+        LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
     };
 
     struct VgaWriterModel {
@@ -390,6 +401,14 @@ mod tests {
     }
 
     #[test]
+    fn interrupt_init_message_line_matches_kernel_canonical_interrupt_line() {
+        assert_eq!(
+            interrupt_init_message_line(),
+            b"tosm-os: idt skeleton initialized\r\n"
+        );
+    }
+
+    #[test]
     fn entry_done_message_line_matches_kernel_canonical_completion_line() {
         assert_eq!(
             entry_done_message_line(),
@@ -425,9 +444,11 @@ mod tests {
     fn line_messages_fit_without_row_wrap() {
         let banner_columns = kernel_entry_message_line().len();
         let panic_columns = panic_message_line().len();
+        let interrupt_columns = interrupt_init_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
         assert!(panic_columns < VGA_TEXT_COLUMNS);
+        assert!(interrupt_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
     }
 
@@ -452,14 +473,15 @@ mod tests {
     }
 
     #[test]
-    fn model_boot_transcript_renders_banner_then_done_on_distinct_rows() {
+    fn model_boot_transcript_renders_banner_then_interrupt_then_done_on_distinct_rows() {
         let mut model = VgaWriterModel::new();
         model.init_for_boot_logs();
 
         model.write_all(kernel_entry_message_line());
+        model.write_all(interrupt_init_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 2);
+        assert_eq!(model.row, 3);
         assert_eq!(model.column, 0);
         assert_eq!(
             model.row_text_without_trailing_blanks(0),
@@ -467,10 +489,14 @@ mod tests {
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(1),
+            b"tosm-os: idt skeleton initialized"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(2),
             b"tosm-os: efi_main completed"
         );
         assert_eq!(
-            model.row_bytes(2),
+            model.row_bytes(3),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
         );
     }
@@ -480,6 +506,7 @@ mod tests {
         let mut model = VgaWriterModel::new();
         model.init_for_boot_logs();
         model.write_all(kernel_entry_message_line());
+        model.write_all(interrupt_init_message_line());
         model.write_all(entry_done_message_line());
 
         model.init_for_boot_logs();
@@ -494,6 +521,10 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: kernel entry reached"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: idt skeleton initialized"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),

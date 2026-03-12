@@ -1,22 +1,22 @@
 # Current milestone
 
 - Active milestone: interrupt setup
-- Subtask: add an IDT skeleton with deterministic exception handlers and early initialization path wiring that can be validated by host tests.
+- Subtask: wire a deterministic early IDT skeleton into firmware entry and lock transcript contracts around interrupt-init ordering.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
-- [ ] make fmt
-- [ ] make lint
-- [ ] make test
-- [ ] make build
-- [ ] make smoke
+- [x] make fmt
+- [x] make lint
+- [x] make test
+- [x] make build
+- [x] make smoke
 - [x] docs updated
 
 ## Progress update
 
-- Completed slice: expanded VGA transcript smoke automation to include carriage-return overwrite and width-boundary wrap contracts, and added matching host-model tests in `uefi-entry` so smoke now enforces deterministic in-row reset and boundary line-advance behavior in addition to initialization/newline/ordering/scrolling checks.
-- Next slice: add an IDT skeleton with deterministic exception handlers and early initialization path wiring that can be validated by host tests.
+- Completed slice: added a kernel-owned x86_64 IDT skeleton model for the first 32 exception vectors, a boot interrupt-init serial line contract, and UEFI boot-path wiring that initializes early interrupts between banner and completion output; smoke + host transcript tests now enforce this ordering.
+- Next slice: replace the shared spin-loop exception stub with vector-specific deterministic handlers and add first exception logging coverage.
 
 <!-- ci-status:start -->
 ## Latest CI automation
