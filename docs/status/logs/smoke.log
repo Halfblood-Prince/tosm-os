@@ -1,66 +1,66 @@
 smoke: serial message contracts present
 [1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.35s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 8.80s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
 running 1 test
 test tests::model_boot_transcript_renders_banner_then_interrupt_then_done_on_distinct_rows ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
 
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
 running 1 test
 test tests::model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
 
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
 running 1 test
 test tests::model_init_clears_screen_and_resets_cursor ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
 
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
 running 1 test
 test tests::model_newline_clears_destination_row ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
 
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
 running 1 test
 test tests::model_carriage_return_resets_column_and_overwrites_in_place ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
 
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
 running 1 test
 test tests::model_width_boundary_wrap_advances_to_next_row_and_clears_it ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
 
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
 running 1 test
 test tests::model_scroll_moves_rows_up_and_clears_last_row ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
 
-smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/memory-reporting/paging-plan-reporting/timer-reporting/scrolling contracts present
+smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/memory-reporting/paging-plan-reporting/timer-reporting/scheduler-thread-reporting/scrolling contracts present
 [1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
-qemu-system-x86_64: terminating on signal 15 from pid 4129 (timeout)
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 1.68s
+qemu-system-x86_64: terminating on signal 15 from pid 4091 (timeout)
 smoke: QEMU timed out after 45s
 smoke: QEMU exited with status 124 after producing complete serial transcript
