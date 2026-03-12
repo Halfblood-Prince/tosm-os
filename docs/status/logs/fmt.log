@@ -1,1 +1,12 @@
-
+Diff in /home/runner/work/tosm-os/tosm-os/boot/uefi-entry/src/lib.rs:481:
+         assert_eq!(model.row, 1);
+         assert_eq!(model.column, 0);
+         assert_eq!(model.row_text_prefix(0), b"tosm-os: panic in uefi-entry");
+-        assert_ne!(
+-            model.row_text_prefix(0),
+-            b"tosm-os: kernel entry reached"
+-        );
++        assert_ne!(model.row_text_prefix(0), b"tosm-os: kernel entry reached");
+         assert_ne!(model.row_text_prefix(0), b"tosm-os: efi_main completed");
+         assert_eq!(
+             model.row_bytes(1),
