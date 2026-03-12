@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: serial and screen output
-- Subtask: mirror canonical boot lines to VGA text output from UEFI entry
-- Status: completed (`boot/uefi-entry` now writes the kernel-provided canonical entry and completion lines to both COM1 and VGA text memory, so early boot diagnostics are visible on serial and screen paths)
+- Subtask: clear CI format gate after VGA mirror slice by fixing rustfmt ordering in `boot/uefi-entry` tests
+- Status: completed (updated `boot/uefi-entry/src/lib.rs` test imports to match rustfmt output, addressing the only failing CI job while preserving behavior)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,7 +15,7 @@
 
 ## Progress update
 
-- Completed slice: implemented a minimal VGA text writer in `boot/uefi-entry` and wired `run_entry` to mirror canonical kernel banner and completion lines to screen output in addition to COM1 serial output.
+- Completed slice: fixed the CI `make fmt` failure by reordering the `boot/uefi-entry` test-module import list to the canonical rustfmt layout.
 - Next slice: keep milestone 2 moving by adding deterministic row management for the VGA path (for example clearing/initializing first lines before writing) while preserving canonical message parity with serial output.
 
 <!-- ci-status:start -->
