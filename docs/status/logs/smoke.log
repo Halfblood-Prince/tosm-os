@@ -1,2 +1,10 @@
 smoke: serial message contracts present
-smoke: OVMF vars firmware unavailable, skipping QEMU execution
+[1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
+[1m[91merror[E0463][0m[1m: can't find crate for `core`[0m
+  [1m[94m|[0m
+  [1m[94m= [0m[1mnote[0m: the `x86_64-unknown-uefi` target may not be installed
+  [1m[94m= [0m[1mhelp[0m: consider downloading the target with `rustup target add x86_64-unknown-uefi`
+
+[1mFor more information about this error, try `rustc --explain E0463`.[0m
+[1m[91merror[0m: could not compile `kernel` (lib) due to 1 previous error
+smoke: expected EFI image missing at target/x86_64-unknown-uefi/debug/bootx64.efi
