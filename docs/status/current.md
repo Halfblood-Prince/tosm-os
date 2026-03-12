@@ -1,7 +1,7 @@
 # Current milestone
 
-- Active milestone: paging / virtual memory
-- Subtask: establish minimal virtual-memory translation helpers and guards for allocator-facing APIs.
+- Active milestone: kernel allocator
+- Subtask: bootstrap the first allocator-backed heap window from early paging identity mappings.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -31,7 +31,8 @@
 - Completed slice: added kernel-level virtual-memory helpers (`VirtualAddress`/`PhysicalAddress`) with canonical-address validation, 4KiB alignment/state guards, and deterministic early identity-map translation contracts to unblock allocator bring-up.
 - Completed slice: fixed the boot-smoke runtime failure trigger by deferring early CR3 installation in the UEFI path until allocator-backed physical ownership is available, preventing pre-transcript faults during QEMU boot smoke.
 - Completed slice: integrated an initial allocator-facing early frame-selection API (`EarlyFrameAllocator`) that consumes paging install reports, validates translation preconditions, and returns deterministic 4KiB frame allocations with explicit error contracts.
-- Next slice: thread the early frame allocator through a first kernel heap bootstrap path.
+- Completed slice: threaded `EarlyFrameAllocator` through a first deterministic kernel-heap bootstrap path (4x4KiB at VA 0x00400000), including canonical heap bootstrap transcript contracts across kernel/UEFI/smoke checks.
+- Next slice: materialize allocation/deallocation operations over the bootstrapped heap window.
 
 <!-- ci-status:start -->
 ## Latest CI automation

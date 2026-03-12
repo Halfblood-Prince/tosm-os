@@ -4,8 +4,8 @@
 2. [x] serial and screen output
 3. [x] interrupt setup
 4. [x] physical memory management
-5. [ ] paging / virtual memory (active)
-6. [ ] kernel allocator
+5. [x] paging / virtual memory
+6. [ ] kernel allocator (active)
 7. [ ] timer support
 8. [ ] scheduler / threads
 9. [ ] syscalls
