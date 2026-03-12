@@ -19,7 +19,9 @@
 - Completed slice: added kernel-owned deterministic exception log line contracts for vectors 0-31 plus an unknown-vector fallback, with host tests and smoke contract checks covering representative vectors and fallback behavior.
 - Completed slice: wired firmware-path exception dispatch logging through kernel dispatch contracts (including CRLF-safe byte accessors), emitting a deterministic vector 14 page-fault line between interrupt init and completion logs.
 - Completed slice: extended host transcript/smoke contracts so boot output ordering now enforces banner -> idt init -> exception vector 14 -> completion.
-- Next slice: begin physical memory milestone with a deterministic host-side model for boot-time memory regions.
+- Completed slice: added a deterministic early physical-memory map model in `kernel` with stable region classification and totals reporting (usable/reserved/highest usable end), plus canonical CRLF memory-init serial contracts.
+- Completed slice: integrated memory-init reporting into UEFI boot transcript output and smoke/QEMU contract checks so boot ordering is now banner -> idt init -> exception vector 14 -> memory init -> completion.
+- Next slice: use the deterministic memory model to start paging bootstrap decisions (frame-window selection and initial mapping plan contracts).
 
 <!-- ci-status:start -->
 ## Latest CI automation

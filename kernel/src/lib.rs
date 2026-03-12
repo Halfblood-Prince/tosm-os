@@ -19,6 +19,10 @@ pub const BOOT_PANIC_LINE: &str = "tosm-os: panic in uefi-entry\r\n";
 /// Canonical completion line emitted when firmware entry returns success.
 pub const BOOT_ENTRY_DONE_LINE: &str = "tosm-os: efi_main completed\r\n";
 
+/// Canonical physical-memory init line emitted after deterministic early map modeling.
+pub const BOOT_MEMORY_INIT_LINE: &str =
+    "tosm-os: memory init usable=0x3f790000 reserved=0x00811000 regions=5\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -47,6 +51,107 @@ pub const fn boot_panic_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_entry_done_line_bytes() -> &'static [u8] {
     BOOT_ENTRY_DONE_LINE.as_bytes()
+}
+
+/// Returns the canonical physical-memory-init line (including CRLF) for serial transmitters.
+#[must_use]
+pub const fn boot_memory_init_line_bytes() -> &'static [u8] {
+    BOOT_MEMORY_INIT_LINE.as_bytes()
+}
+
+/// Maximum number of deterministic early memory-map regions modeled during bring-up.
+pub const EARLY_MEMORY_REGION_COUNT: usize = 5;
+
+/// Coarse physical memory region classification used by the early memory milestone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PhysicalMemoryRegionKind {
+    Usable,
+    Reserved,
+}
+
+/// Deterministic physical memory region record used by early host-side modeling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PhysicalMemoryRegion {
+    pub start: u64,
+    pub length: u64,
+    pub kind: PhysicalMemoryRegionKind,
+}
+
+/// Deterministic physical-memory init report produced at boot-time model initialization.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PhysicalMemoryInitReport {
+    pub regions_modeled: usize,
+    pub usable_bytes: u64,
+    pub reserved_bytes: u64,
+    pub highest_usable_end_exclusive: u64,
+}
+
+const EARLY_PHYSICAL_MEMORY_MAP: [PhysicalMemoryRegion; EARLY_MEMORY_REGION_COUNT] = [
+    PhysicalMemoryRegion {
+        start: 0x0000_0000,
+        length: 0x0009_f000,
+        kind: PhysicalMemoryRegionKind::Usable,
+    },
+    PhysicalMemoryRegion {
+        start: 0x0009_f000,
+        length: 0x0000_1000,
+        kind: PhysicalMemoryRegionKind::Reserved,
+    },
+    PhysicalMemoryRegion {
+        start: 0x000f_0000,
+        length: 0x0001_0000,
+        kind: PhysicalMemoryRegionKind::Reserved,
+    },
+    PhysicalMemoryRegion {
+        start: 0x0010_0000,
+        length: 0x3f6f_1000,
+        kind: PhysicalMemoryRegionKind::Usable,
+    },
+    PhysicalMemoryRegion {
+        start: 0x3f7f_1000,
+        length: 0x0080_0000,
+        kind: PhysicalMemoryRegionKind::Reserved,
+    },
+];
+
+/// Returns the deterministic early physical memory map model used during bring-up.
+#[must_use]
+pub const fn early_physical_memory_map(
+) -> &'static [PhysicalMemoryRegion; EARLY_MEMORY_REGION_COUNT] {
+    &EARLY_PHYSICAL_MEMORY_MAP
+}
+
+/// Initializes the deterministic early physical-memory model for host-side contracts.
+#[must_use]
+pub fn init_early_physical_memory() -> PhysicalMemoryInitReport {
+    let mut usable_bytes = 0_u64;
+    let mut reserved_bytes = 0_u64;
+    let mut highest_usable_end_exclusive = 0_u64;
+
+    let mut index = 0;
+    while index < EARLY_MEMORY_REGION_COUNT {
+        let region = EARLY_PHYSICAL_MEMORY_MAP[index];
+        match region.kind {
+            PhysicalMemoryRegionKind::Usable => {
+                usable_bytes += region.length;
+                let region_end_exclusive = region.start + region.length;
+                if region_end_exclusive > highest_usable_end_exclusive {
+                    highest_usable_end_exclusive = region_end_exclusive;
+                }
+            }
+            PhysicalMemoryRegionKind::Reserved => {
+                reserved_bytes += region.length;
+            }
+        }
+        index += 1;
+    }
+
+    PhysicalMemoryInitReport {
+        regions_modeled: EARLY_MEMORY_REGION_COUNT,
+        usable_bytes,
+        reserved_bytes,
+        highest_usable_end_exclusive,
+    }
 }
 
 /// Number of architectural exception vectors reserved at boot.
@@ -376,10 +481,12 @@ extern crate std;
 mod tests {
     use super::{
         boot_banner_bytes, boot_banner_line_bytes, boot_entry_done_line_bytes,
-        boot_interrupt_init_line_bytes, boot_panic_line_bytes, dispatch_exception,
-        early_idt_descriptor, early_idt_entries, exception_log_line, exception_log_line_bytes,
-        init_early_interrupts, IdtEntry, BOOT_BANNER, BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE,
-        BOOT_INTERRUPT_INIT_LINE, BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
+        boot_interrupt_init_line_bytes, boot_memory_init_line_bytes, boot_panic_line_bytes,
+        dispatch_exception, early_idt_descriptor, early_idt_entries, early_physical_memory_map,
+        exception_log_line, exception_log_line_bytes, init_early_interrupts,
+        init_early_physical_memory, IdtEntry, PhysicalMemoryRegionKind, BOOT_BANNER,
+        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE,
+        BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -426,6 +533,40 @@ mod tests {
             boot_entry_done_line_bytes(),
             b"tosm-os: efi_main completed\r\n"
         );
+    }
+
+    #[test]
+    fn boot_memory_init_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_MEMORY_INIT_LINE,
+            "tosm-os: memory init usable=0x3f790000 reserved=0x00811000 regions=5\r\n"
+        );
+        assert_eq!(
+            boot_memory_init_line_bytes(),
+            b"tosm-os: memory init usable=0x3f790000 reserved=0x00811000 regions=5\r\n"
+        );
+    }
+
+    #[test]
+    fn early_physical_memory_map_model_has_expected_regions() {
+        let map = early_physical_memory_map();
+        assert_eq!(map.len(), 5);
+        assert_eq!(map[0].start, 0x0000_0000);
+        assert_eq!(map[0].length, 0x0009_f000);
+        assert_eq!(map[0].kind, PhysicalMemoryRegionKind::Usable);
+        assert_eq!(map[1].kind, PhysicalMemoryRegionKind::Reserved);
+        assert_eq!(map[3].start, 0x0010_0000);
+        assert_eq!(map[3].length, 0x3f6f_1000);
+        assert_eq!(map[3].kind, PhysicalMemoryRegionKind::Usable);
+    }
+
+    #[test]
+    fn init_early_physical_memory_reports_usable_and_reserved_totals() {
+        let report = init_early_physical_memory();
+        assert_eq!(report.regions_modeled, 5);
+        assert_eq!(report.usable_bytes, 0x0000_0000_3f79_0000);
+        assert_eq!(report.reserved_bytes, 0x0000_0000_0081_1000);
+        assert_eq!(report.highest_usable_end_exclusive, 0x0000_0000_3f7f_1000);
     }
 
     #[test]

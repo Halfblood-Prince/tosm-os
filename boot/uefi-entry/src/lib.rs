@@ -255,6 +255,12 @@ pub const fn entry_done_message_line() -> &'static [u8] {
     kernel::boot_entry_done_line_bytes()
 }
 
+/// Returns the deterministic physical-memory init line expected after map modeling.
+#[must_use]
+pub const fn memory_init_message_line() -> &'static [u8] {
+    kernel::boot_memory_init_line_bytes()
+}
+
 /// Returns the deterministic exception line expected from early dispatch logging.
 #[must_use]
 pub fn exception_message_line(vector: u8) -> &'static [u8] {
@@ -279,6 +285,10 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
     let simulated_dispatch = kernel::dispatch_exception(14);
     serial.write_all(simulated_dispatch.line.as_bytes());
     screen.write_all(simulated_dispatch.line.as_bytes());
+
+    let _memory_report = kernel::init_early_physical_memory();
+    serial.write_all(memory_init_message_line());
+    screen.write_all(memory_init_message_line());
 
     serial.write_all(entry_done_message_line());
     screen.write_all(entry_done_message_line());
@@ -309,9 +319,9 @@ mod tests {
 
     use super::{
         entry_done_message_line, exception_message_line, interrupt_init_message_line,
-        kernel_entry_message_line, panic_message_line, vga_cell_index, EfiStatus,
-        BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY,
-        VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
+        kernel_entry_message_line, memory_init_message_line, panic_message_line, vga_cell_index,
+        EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB,
+        LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
     };
 
     struct VgaWriterModel {
@@ -428,6 +438,14 @@ mod tests {
     }
 
     #[test]
+    fn memory_init_message_line_matches_kernel_canonical_memory_line() {
+        assert_eq!(
+            memory_init_message_line(),
+            b"tosm-os: memory init usable=0x3f790000 reserved=0x00811000 regions=5\r\n"
+        );
+    }
+
+    #[test]
     fn efi_status_success_value_is_zero() {
         assert_eq!(EfiStatus::SUCCESS.0, 0);
     }
@@ -456,10 +474,12 @@ mod tests {
         let banner_columns = kernel_entry_message_line().len();
         let panic_columns = panic_message_line().len();
         let interrupt_columns = interrupt_init_message_line().len();
+        let memory_columns = memory_init_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
         assert!(panic_columns < VGA_TEXT_COLUMNS);
         assert!(interrupt_columns < VGA_TEXT_COLUMNS);
+        assert!(memory_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
     }
 
@@ -491,9 +511,10 @@ mod tests {
         model.write_all(kernel_entry_message_line());
         model.write_all(interrupt_init_message_line());
         model.write_all(exception_message_line(14));
+        model.write_all(memory_init_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 4);
+        assert_eq!(model.row, 5);
         assert_eq!(model.column, 0);
         assert_eq!(
             model.row_text_without_trailing_blanks(0),
@@ -509,10 +530,14 @@ mod tests {
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(3),
+            b"tosm-os: memory init usable=0x3f790000 reserved=0x00811000 regions=5"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(4),
             b"tosm-os: efi_main completed"
         );
         assert_eq!(
-            model.row_bytes(4),
+            model.row_bytes(5),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
         );
     }
@@ -524,6 +549,7 @@ mod tests {
         model.write_all(kernel_entry_message_line());
         model.write_all(interrupt_init_message_line());
         model.write_all(exception_message_line(14));
+        model.write_all(memory_init_message_line());
         model.write_all(entry_done_message_line());
 
         model.init_for_boot_logs();
@@ -546,6 +572,10 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: exception vector 14 page fault"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: memory init usable=0x3f790000 reserved=0x00811000 regions=5"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
