@@ -2,7 +2,9 @@
 #![forbid(unsafe_op_in_unsafe_fn)]
 
 use core::mem::size_of;
+use core::ptr::null_mut;
 use core::sync::atomic::{AtomicBool, Ordering};
+use core::{alloc::GlobalAlloc, alloc::Layout, cell::UnsafeCell};
 
 /// Deterministic serial banner used by the boot milestone smoke test.
 pub const BOOT_BANNER: &str = "tosm-os: kernel entry reached";
@@ -38,6 +40,10 @@ pub const BOOT_HEAP_BOOTSTRAP_LINE: &str =
 /// Canonical heap-operation line emitted after deterministic allocation/deallocation cycle passes.
 pub const BOOT_HEAP_ALLOC_CYCLE_LINE: &str =
     "tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000\r\n";
+
+/// Canonical global-allocator readiness line emitted once the early heap facade is installed.
+pub const BOOT_GLOBAL_ALLOCATOR_READY_LINE: &str =
+    "tosm-os: global allocator ready heap=0x00400000-0x00404000\r\n";
 
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
@@ -97,6 +103,12 @@ pub const fn boot_heap_bootstrap_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_heap_alloc_cycle_line_bytes() -> &'static [u8] {
     BOOT_HEAP_ALLOC_CYCLE_LINE.as_bytes()
+}
+
+/// Returns the canonical global-allocator readiness line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_global_allocator_ready_line_bytes() -> &'static [u8] {
+    BOOT_GLOBAL_ALLOCATOR_READY_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -237,6 +249,19 @@ pub struct EarlyHeapOperationCycleReport {
 pub enum EarlyHeapOperationError {
     Allocation(EarlyHeapAllocationError),
     Deallocation(EarlyHeapDeallocationError),
+}
+
+/// Errors returned when initializing the global allocator facade.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GlobalAllocatorInitError {
+    AlreadyInitialized,
+}
+
+/// Deterministic report for global-allocator bring-up state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GlobalAllocatorStateReport {
+    pub initialized: bool,
+    pub allocated_bytes: u64,
 }
 
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
@@ -574,6 +599,137 @@ pub fn run_early_heap_alloc_cycle(
         final_cursor_virt: allocator.cursor_virt(),
     })
 }
+
+/// Minimal global allocator facade backed by the deterministic early heap allocator.
+pub struct EarlyGlobalAllocator {
+    allocator: UnsafeCell<Option<EarlyHeapAllocator>>,
+    initialized: AtomicBool,
+    lock: AtomicBool,
+}
+
+// SAFETY: Allocation operations are serialized through an explicit spin lock around the mutable
+// allocator state inside `UnsafeCell`.
+unsafe impl Sync for EarlyGlobalAllocator {}
+
+impl Default for EarlyGlobalAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EarlyGlobalAllocator {
+    /// Constructs an empty global allocator facade that requires explicit initialization.
+    pub const fn new() -> Self {
+        Self {
+            allocator: UnsafeCell::new(None),
+            initialized: AtomicBool::new(false),
+            lock: AtomicBool::new(false),
+        }
+    }
+
+    /// Installs the early heap allocator exactly once.
+    pub fn init(&self, heap_allocator: EarlyHeapAllocator) -> Result<(), GlobalAllocatorInitError> {
+        if self.initialized.swap(true, Ordering::AcqRel) {
+            return Err(GlobalAllocatorInitError::AlreadyInitialized);
+        }
+
+        // SAFETY: Initialization transitions from `None` to `Some` exactly once while the
+        // `initialized` flag prevents concurrent reinitialization.
+        unsafe {
+            *self.allocator.get() = Some(heap_allocator);
+        }
+        Ok(())
+    }
+
+    fn with_lock<R>(&self, f: impl FnOnce(&mut EarlyHeapAllocator) -> R) -> Option<R> {
+        while self
+            .lock
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            core::hint::spin_loop();
+        }
+
+        // SAFETY: The lock guarantees exclusive mutable access to allocator state.
+        let result = unsafe { (*self.allocator.get()).as_mut().map(f) };
+
+        self.lock.store(false, Ordering::Release);
+        result
+    }
+
+    /// Returns deterministic allocator state information for transcript logging.
+    #[must_use]
+    pub fn state_report(&self) -> GlobalAllocatorStateReport {
+        let initialized = self.initialized.load(Ordering::Acquire);
+        let allocated_bytes = if initialized {
+            // SAFETY: `initialized` implies allocator was installed via `init`.
+            unsafe {
+                (*self.allocator.get())
+                    .as_ref()
+                    .map_or(0, EarlyHeapAllocator::allocated_bytes)
+            }
+        } else {
+            0
+        };
+
+        GlobalAllocatorStateReport {
+            initialized,
+            allocated_bytes,
+        }
+    }
+
+    fn allocate_inner(&self, layout: Layout) -> *mut u8 {
+        if !self.initialized.load(Ordering::Acquire) {
+            return null_mut();
+        }
+
+        self.with_lock(|allocator| {
+            match allocator.allocate(layout.size() as u64, layout.align() as u64) {
+                Ok(allocation) => allocation.start_virt.0 as *mut u8,
+                Err(_) => null_mut(),
+            }
+        })
+        .unwrap_or(null_mut())
+    }
+
+    fn deallocate_inner(&self, ptr: *mut u8, layout: Layout) {
+        if ptr.is_null() || !self.initialized.load(Ordering::Acquire) {
+            return;
+        }
+
+        let allocation = EarlyHeapAllocation {
+            start_virt: VirtualAddress(ptr as u64),
+            size_bytes: layout.size() as u64,
+            alignment: layout.align() as u64,
+            in_use: true,
+        };
+
+        let _ = self.with_lock(|allocator| allocator.deallocate(allocation));
+    }
+}
+
+unsafe impl GlobalAlloc for EarlyGlobalAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        self.allocate_inner(layout)
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        self.deallocate_inner(ptr, layout);
+    }
+}
+
+/// Deterministic global allocator facade instance for early kernel-owned structures.
+pub static EARLY_GLOBAL_ALLOCATOR: EarlyGlobalAllocator = EarlyGlobalAllocator::new();
+
+/// Installs a global allocator facade backed by the deterministic early heap allocator.
+pub fn init_early_global_allocator(
+    heap_bootstrap: EarlyHeapBootstrapReport,
+) -> Result<GlobalAllocatorStateReport, GlobalAllocatorInitError> {
+    let heap_allocator = EarlyHeapAllocator::from_bootstrap(heap_bootstrap);
+    EARLY_GLOBAL_ALLOCATOR.init(heap_allocator)?;
+    Ok(EARLY_GLOBAL_ALLOCATOR.state_report())
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(transparent)]
 struct PageTableEntry(u64);
@@ -1116,21 +1272,23 @@ extern crate std;
 mod tests {
     use super::{
         boot_banner_bytes, boot_banner_line_bytes, boot_entry_done_line_bytes,
-        boot_heap_alloc_cycle_line_bytes, boot_heap_bootstrap_line_bytes,
-        boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
-        boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
-        bootstrap_early_kernel_heap, dispatch_exception, early_idt_descriptor, early_idt_entries,
-        early_paging_table_snapshot, early_physical_memory_map, early_translation_state_valid,
-        exception_log_line, exception_log_line_bytes, init_early_interrupts,
+        boot_global_allocator_ready_line_bytes, boot_heap_alloc_cycle_line_bytes,
+        boot_heap_bootstrap_line_bytes, boot_interrupt_init_line_bytes,
+        boot_memory_init_line_bytes, boot_paging_install_line_bytes, boot_paging_plan_line_bytes,
+        boot_panic_line_bytes, bootstrap_early_kernel_heap, dispatch_exception,
+        early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
+        early_physical_memory_map, early_translation_state_valid, exception_log_line,
+        exception_log_line_bytes, init_early_global_allocator, init_early_interrupts,
         init_early_paging_plan, init_early_physical_memory, install_early_paging,
         is_canonical_virtual_address, is_page_aligned_4k, run_early_heap_alloc_cycle,
         translate_early_virtual_to_physical, EarlyFrameAllocationError, EarlyFrameAllocator,
         EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
-        EarlyHeapDeallocationError, EarlyHeapOperationError, IdtEntry, PhysicalMemoryRegionKind,
-        VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER, BOOT_BANNER_LINE,
-        BOOT_ENTRY_DONE_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
-        BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
-        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
+        EarlyHeapDeallocationError, EarlyHeapOperationError, GlobalAllocatorInitError, IdtEntry,
+        PhysicalMemoryRegionKind, VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER,
+        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_READY_LINE,
+        BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE, BOOT_INTERRUPT_INIT_LINE,
+        BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE,
+        EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -1236,6 +1394,18 @@ mod tests {
         assert_eq!(
             boot_heap_alloc_cycle_line_bytes(),
             b"tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000\r\n"
+        );
+    }
+
+    #[test]
+    fn boot_global_allocator_ready_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_GLOBAL_ALLOCATOR_READY_LINE,
+            "tosm-os: global allocator ready heap=0x00400000-0x00404000\r\n"
+        );
+        assert_eq!(
+            boot_global_allocator_ready_line_bytes(),
+            b"tosm-os: global allocator ready heap=0x00400000-0x00404000\r\n"
         );
     }
 
@@ -1550,6 +1720,25 @@ mod tests {
             err,
             EarlyHeapOperationError::Allocation(EarlyHeapAllocationError::OutOfMemory)
         ));
+    }
+
+    #[test]
+    fn init_early_global_allocator_reports_initialized_state() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+        let mut frame_allocator = EarlyFrameAllocator::from_install_report(install);
+        let bootstrap = bootstrap_early_kernel_heap(&mut frame_allocator, install)
+            .expect("heap bootstrap should succeed for allocator tests");
+
+        let report = init_early_global_allocator(bootstrap)
+            .expect("global allocator initialization should succeed once");
+        assert!(report.initialized);
+        assert_eq!(report.allocated_bytes, 0);
+
+        let second = init_early_global_allocator(bootstrap)
+            .expect_err("global allocator must reject double initialization");
+        assert_eq!(second, GlobalAllocatorInitError::AlreadyInitialized);
     }
 
     #[test]

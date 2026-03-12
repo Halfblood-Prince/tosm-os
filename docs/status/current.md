@@ -33,7 +33,8 @@
 - Completed slice: integrated an initial allocator-facing early frame-selection API (`EarlyFrameAllocator`) that consumes paging install reports, validates translation preconditions, and returns deterministic 4KiB frame allocations with explicit error contracts.
 - Completed slice: threaded `EarlyFrameAllocator` through a first deterministic kernel-heap bootstrap path (4x4KiB at VA 0x00400000), including canonical heap bootstrap transcript contracts across kernel/UEFI/smoke checks.
 - Completed slice: added a deterministic early-heap bump allocator with tracked allocate/deallocate operations, plus a canonical boot-time alloc-cycle contract (`allocs=2 frees=2 cursor=0x00400000`) wired through kernel tests, UEFI transcript output, and smoke checks.
-- Next slice: connect the early-heap allocator to a minimal global allocator facade for kernel-owned dynamic structures.
+- Completed slice: connected the early-heap bootstrap window to a minimal `GlobalAlloc` facade with one-time initialization/state reporting contracts, and integrated a canonical global-allocator-ready boot transcript line across kernel/UEFI/smoke checks.
+- Next slice: route a first kernel-owned dynamic structure through the global allocator facade to validate end-to-end allocation usage in boot flow.
 
 <!-- ci-status:start -->
 ## Latest CI automation
