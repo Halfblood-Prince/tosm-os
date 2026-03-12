@@ -10,3 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 kernel = { path = "../../kernel" }
+
+[[bin]]
+name = "bootx64"
+path = "src/main.rs"

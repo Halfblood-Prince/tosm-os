@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: extend smoke contract coverage to assert canonical CRLF-terminated line literals for banner, panic, and completion
-- Status: in_progress (added CRLF literal checks for banner/panic/completion in smoke gate; awaiting CI rerun)
+- Subtask: add a UEFI application target and opportunistic QEMU smoke execution over serial output
+- Status: in_progress (implemented `bootx64` UEFI target and smoke script now runs QEMU when firmware tooling exists)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -12,6 +12,11 @@
 - [ ] make build
 - [ ] make smoke
 - [x] docs updated
+
+## Progress update
+
+- Completed slice: UEFI binary target (`bootx64`) is now defined for `x86_64-unknown-uefi`, and smoke now does both source-level contract checks and runtime serial validation in QEMU when `qemu-system-x86_64` + OVMF are available.
+- Next slice: make QEMU smoke mandatory in CI by provisioning deterministic OVMF firmware paths and enforcing runtime execution instead of fallback mode.
 
 <!-- ci-status:start -->
 ## Latest CI automation

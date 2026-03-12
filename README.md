@@ -5,13 +5,13 @@ The repository is progressing through the first milestone (`bootloader and entry
 This slice introduces a minimal Rust workspace with:
 
 - a host-testable `kernel` crate that owns an explicit deterministic boot banner literal plus canonical CRLF-terminated serial line helpers for both entry and completion paths
-- a `boot/uefi-entry` crate that defines a UEFI ABI `efi_main`, writes kernel-provided banner and completion lines to COM1, and includes a minimal panic handler
+- a `boot/uefi-entry` crate that defines a UEFI ABI `efi_main`, writes kernel-provided banner and completion lines to COM1, includes a minimal panic handler, and provides a `bootx64` UEFI application target
 
 Canonical boot banner:
 
 - `tosm-os: kernel entry reached`
 
-A temporary smoke script (`tools/smoke-test.sh`) currently enforces deterministic serial message contracts (boot banner, panic line, and completion line) while QEMU automation is still pending.
+The smoke script (`tools/smoke-test.sh`) enforces deterministic serial message contracts and, when `qemu-system-x86_64` plus OVMF firmware images are available, boots the generated UEFI image in QEMU and verifies serial output.
 
 Workspace validation commands are wired through canonical `make` targets:
 
@@ -21,7 +21,7 @@ Workspace validation commands are wired through canonical `make` targets:
 - `make build`
 - `make smoke`
 
-Full QEMU smoke automation remains the next incremental step.
+QEMU runtime smoke execution is opportunistic: it runs when the host environment provides QEMU + OVMF and otherwise leaves a contract-only smoke pass.
 
 ## Codex + CI workflow
 
