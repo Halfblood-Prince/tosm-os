@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: timer support
-- Subtask: establish deterministic PIT timer initialization contracts and wire timer-init transcript output.
+- Subtask: establish deterministic PIT timer initialization contracts, periodic tick accounting, and first-tick transcript output.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -36,7 +36,8 @@
 - Completed slice: connected the early-heap bootstrap window to a minimal `GlobalAlloc` facade with one-time initialization/state reporting contracts, and integrated a canonical global-allocator-ready boot transcript line across kernel/UEFI/smoke checks.
 - Completed slice: routed a first kernel-owned dynamic structure through the global allocator facade with deterministic probe contracts (`entries=4 checksum=0x2a`) wired across kernel/UEFI/smoke checks and tests, validating end-to-end allocate/use/free behavior in boot flow.
 - Completed slice: added deterministic early PIT timer contracts (source/frequency/divisor/IRQ/tick-period), integrated canonical timer-init serial/VGA transcript output into UEFI entry flow, and extended kernel/UEFI/smoke contract checks to enforce the new timer line before boot completion.
-- Next slice: extend timer support with deterministic periodic tick accounting hooks and transcript coverage for first delivered tick.
+- Completed slice: implemented deterministic periodic timer tick accounting state in kernel, added canonical first-tick transcript contracts (`irq=0x20 count=1 uptime_ns=10000000`), wired first-tick emission in UEFI boot flow, and extended transcript/smoke checks to require timer-init -> timer-first-tick ordering before completion.
+- Next slice: wire timer tick acknowledgements through early interrupt dispatch path and expose multi-tick transcript coverage for scheduler handoff.
 
 <!-- ci-status:start -->
 ## Latest CI automation
