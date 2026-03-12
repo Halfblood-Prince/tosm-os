@@ -171,6 +171,14 @@ pub struct InterruptInitReport {
     pub last_handler_addr: usize,
 }
 
+/// Deterministic exception dispatch report used by early firmware logging paths.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ExceptionDispatchReport {
+    pub vector: u8,
+    pub known_vector: bool,
+    pub line: &'static str,
+}
+
 extern "C" fn early_exception_spin_stub() {
     loop {
         core::hint::spin_loop();
@@ -328,6 +336,23 @@ pub fn exception_log_line(vector: u8) -> &'static str {
     }
 }
 
+/// Returns the deterministic early exception serial log line as bytes.
+#[must_use]
+pub fn exception_log_line_bytes(vector: u8) -> &'static [u8] {
+    exception_log_line(vector).as_bytes()
+}
+
+/// Produces a deterministic exception dispatch report for firmware logging paths.
+#[must_use]
+pub fn dispatch_exception(vector: u8) -> ExceptionDispatchReport {
+    let known_vector = usize::from(vector) < EXCEPTION_VECTOR_COUNT;
+    ExceptionDispatchReport {
+        vector,
+        known_vector,
+        line: exception_log_line(vector),
+    }
+}
+
 #[cfg(all(target_arch = "x86_64", target_os = "uefi"))]
 fn maybe_load_early_idt(descriptor: &IdtDescriptor) {
     // SAFETY: During firmware boot on x86_64 we intentionally install a statically allocated
@@ -351,10 +376,10 @@ extern crate std;
 mod tests {
     use super::{
         boot_banner_bytes, boot_banner_line_bytes, boot_entry_done_line_bytes,
-        boot_interrupt_init_line_bytes, boot_panic_line_bytes, early_idt_descriptor,
-        early_idt_entries, exception_log_line, init_early_interrupts, IdtEntry, BOOT_BANNER,
-        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_INTERRUPT_INIT_LINE, BOOT_PANIC_LINE,
-        EXCEPTION_VECTOR_COUNT,
+        boot_interrupt_init_line_bytes, boot_panic_line_bytes, dispatch_exception,
+        early_idt_descriptor, early_idt_entries, exception_log_line, exception_log_line_bytes,
+        init_early_interrupts, IdtEntry, BOOT_BANNER, BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE,
+        BOOT_INTERRUPT_INIT_LINE, BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -470,6 +495,34 @@ mod tests {
             exception_log_line(EXCEPTION_VECTOR_COUNT as u8),
             "tosm-os: exception vector unknown\r\n"
         );
+    }
+
+    #[test]
+    fn exception_log_line_bytes_include_crlf() {
+        assert_eq!(
+            exception_log_line_bytes(13),
+            b"tosm-os: exception vector 13 general protection fault\r\n"
+        );
+        assert_eq!(
+            exception_log_line_bytes(EXCEPTION_VECTOR_COUNT as u8),
+            b"tosm-os: exception vector unknown\r\n"
+        );
+    }
+
+    #[test]
+    fn dispatch_exception_reports_known_and_unknown_vectors() {
+        let page_fault = dispatch_exception(14);
+        assert_eq!(page_fault.vector, 14);
+        assert!(page_fault.known_vector);
+        assert_eq!(
+            page_fault.line,
+            "tosm-os: exception vector 14 page fault\r\n"
+        );
+
+        let unknown = dispatch_exception(EXCEPTION_VECTOR_COUNT as u8);
+        assert_eq!(unknown.vector, EXCEPTION_VECTOR_COUNT as u8);
+        assert!(!unknown.known_vector);
+        assert_eq!(unknown.line, "tosm-os: exception vector unknown\r\n");
     }
 
     #[test]

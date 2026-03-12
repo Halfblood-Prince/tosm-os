@@ -1,7 +1,7 @@
 # Current milestone
 
-- Active milestone: interrupt setup
-- Subtask: ship vector-specific early exception stubs plus deterministic exception-log message contracts for vectors 0-31.
+- Active milestone: physical memory management
+- Subtask: begin deterministic early physical-memory map model and reporting contracts.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -17,7 +17,9 @@
 
 - Completed slice: replaced the single shared early exception handler pointer with 32 vector-specific early stubs and wired the early IDT population path so each exception vector gets its own deterministic handler address.
 - Completed slice: added kernel-owned deterministic exception log line contracts for vectors 0-31 plus an unknown-vector fallback, with host tests and smoke contract checks covering representative vectors and fallback behavior.
-- Next slice: wire real exception dispatch logging in firmware path (or a host model of it) so an observed exception vector can emit the matching deterministic serial line.
+- Completed slice: wired firmware-path exception dispatch logging through kernel dispatch contracts (including CRLF-safe byte accessors), emitting a deterministic vector 14 page-fault line between interrupt init and completion logs.
+- Completed slice: extended host transcript/smoke contracts so boot output ordering now enforces banner -> idt init -> exception vector 14 -> completion.
+- Next slice: begin physical memory milestone with a deterministic host-side model for boot-time memory regions.
 
 <!-- ci-status:start -->
 ## Latest CI automation

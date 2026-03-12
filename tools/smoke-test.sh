@@ -11,6 +11,7 @@ expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
 expected_interrupt_init_line='tosm-os: idt skeleton initialized\r\n'
 expected_entry_done_line='tosm-os: efi_main completed\r\n'
+expected_exception_page_fault_line='tosm-os: exception vector 14 page fault\r\n'
 
 contract_check() {
   if ! grep --fixed-strings --quiet -- "${expected_banner}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
@@ -38,6 +39,11 @@ contract_check() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_exception_page_fault}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected exception vector 14 line not found"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_panic}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected panic line not found"
     exit 1
@@ -60,6 +66,11 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_entry_done_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected efi_main completion CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_exception_page_fault_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected exception vector 14 CRLF contract not found"
     exit 1
   fi
 
@@ -205,12 +216,17 @@ run_qemu_smoke() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_exception_page_fault}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing exception vector 14 line"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing completion line"
     exit 1
   fi
 
-  echo "smoke: QEMU boot output includes banner, interrupt-init, and completion lines"
+  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, and completion lines"
 }
 
 contract_check
