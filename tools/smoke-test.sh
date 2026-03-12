@@ -77,6 +77,23 @@ find_ovmf_vars() {
   return 1
 }
 
+
+ensure_uefi_target_installed() {
+  local target="x86_64-unknown-uefi"
+
+  if ! command -v rustup >/dev/null 2>&1; then
+    echo "smoke: rustup unavailable; cannot provision ${target} target"
+    return 1
+  fi
+
+  if rustup target list --installed | grep --fixed-strings --quiet -- "${target}"; then
+    return 0
+  fi
+
+  echo "smoke: installing missing Rust target ${target}"
+  rustup target add "${target}"
+}
+
 run_qemu_smoke() {
   local qemu_bin="${QEMU_BIN:-qemu-system-x86_64}"
   if ! command -v "${qemu_bin}" >/dev/null 2>&1; then
@@ -105,6 +122,8 @@ run_qemu_smoke() {
     echo "smoke: OVMF vars firmware unavailable, skipping QEMU execution"
     return 2
   fi
+
+  ensure_uefi_target_installed
 
   cargo build --package uefi-entry --bin bootx64 --target x86_64-unknown-uefi
 

@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: make CI smoke build UEFI target successfully by provisioning `x86_64-unknown-uefi` in the smoke job toolchain setup
-- Status: completed (boot-smoke CI now installs the UEFI compilation target before invoking `tools/smoke-test.sh`)
+- Subtask: make smoke self-provision the UEFI Rust target so EFI image builds do not fail when `x86_64-unknown-uefi` is missing
+- Status: completed (`tools/smoke-test.sh` now checks installed Rust targets and runs `rustup target add x86_64-unknown-uefi` before building `bootx64`, so smoke no longer depends on external target pre-provisioning)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: fixed the smallest concrete CI failure in smoke by adding `x86_64-unknown-uefi` target installation to `.github/workflows/ci.yml` `boot-smoke` Rust toolchain setup, addressing the reported `can't find crate for core` error during EFI target compilation.
-- Next slice: rerun CI and, on success, begin milestone 2 (`serial and screen output`) by adding a minimal screen-output path that mirrors canonical serial boot messages.
+- Completed slice: fixed the smallest concrete CI failure in smoke by adding target self-provisioning inside `tools/smoke-test.sh`; the script now installs `x86_64-unknown-uefi` via `rustup` when absent before building `bootx64`, directly addressing the reported `can't find crate for core` EFI compilation error.
+- Next slice: wait for CI results for this smoke fix; once CI is green, mark milestone 1 complete and begin milestone 2 (`serial and screen output`) with a minimal screen-output path mirroring canonical serial boot messages.
 
 <!-- ci-status:start -->
 ## Latest CI automation
