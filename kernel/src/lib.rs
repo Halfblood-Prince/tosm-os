@@ -57,6 +57,13 @@ pub const BOOT_TIMER_INIT_LINE: &str =
 pub const BOOT_TIMER_FIRST_TICK_LINE: &str =
     "tosm-os: timer tick irq=0x20 count=1 uptime_ns=10000000\r\n";
 
+/// Canonical timer-third-tick line emitted after deterministic multi-tick interrupt dispatch.
+pub const BOOT_TIMER_THIRD_TICK_LINE: &str =
+    "tosm-os: timer tick irq=0x20 count=3 uptime_ns=30000000\r\n";
+
+/// Canonical timer-ack line emitted when the timer IRQ is acknowledged through the PIC path.
+pub const BOOT_TIMER_ACK_LINE: &str = "tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -139,6 +146,18 @@ pub const fn boot_timer_init_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_timer_first_tick_line_bytes() -> &'static [u8] {
     BOOT_TIMER_FIRST_TICK_LINE.as_bytes()
+}
+
+/// Returns the canonical timer-third-tick line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_timer_third_tick_line_bytes() -> &'static [u8] {
+    BOOT_TIMER_THIRD_TICK_LINE.as_bytes()
+}
+
+/// Returns the canonical timer-ack line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_timer_ack_line_bytes() -> &'static [u8] {
+    BOOT_TIMER_ACK_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -328,6 +347,22 @@ pub struct EarlyTimerTickReport {
     pub uptime_ns: u64,
 }
 
+/// Deterministic PIC-ack report for early timer interrupt handling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyTimerAckReport {
+    pub irq_vector: u8,
+    pub pic_command_port: u16,
+    pub pic_eoi_value: u8,
+    pub acknowledged: bool,
+}
+
+/// Deterministic dispatch report produced when handling a timer IRQ path end-to-end.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyTimerInterruptDispatchReport {
+    pub tick: EarlyTimerTickReport,
+    pub ack: EarlyTimerAckReport,
+}
+
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
 pub const EARLY_PAGING_FRAME_WINDOW_FRAMES: usize = 4;
 pub const EARLY_IDENTITY_MAP_PAGES_4K: usize = 512;
@@ -345,6 +380,8 @@ const EARLY_PAGING_PRESENT_ENTRY_COUNT: usize = 1 + 1 + EARLY_IDENTITY_MAP_PAGES
 const PIT_INPUT_CLOCK_HZ: u64 = 1_193_182;
 const EARLY_TIMER_TARGET_HZ: u64 = 100;
 const TIMER_IRQ_VECTOR: u8 = 0x20;
+const PIC_MASTER_COMMAND_PORT: u16 = 0x20;
+const PIC_NON_SPECIFIC_EOI: u8 = 0x20;
 static EARLY_TIMER_TICK_COUNT: AtomicU64 = AtomicU64::new(0);
 
 /// Returns true when a value is 4KiB aligned.
@@ -1063,6 +1100,27 @@ pub fn record_early_timer_tick(config: EarlyTimerInitReport) -> EarlyTimerTickRe
     }
 }
 
+/// Returns deterministic PIC end-of-interrupt acknowledgement metadata for timer IRQ handling.
+#[must_use]
+pub fn acknowledge_early_timer_interrupt(config: EarlyTimerInitReport) -> EarlyTimerAckReport {
+    EarlyTimerAckReport {
+        irq_vector: config.irq_vector,
+        pic_command_port: PIC_MASTER_COMMAND_PORT,
+        pic_eoi_value: PIC_NON_SPECIFIC_EOI,
+        acknowledged: true,
+    }
+}
+
+/// Handles a deterministic early timer interrupt by accounting the tick and issuing PIC ACK.
+#[must_use]
+pub fn dispatch_early_timer_interrupt(
+    config: EarlyTimerInitReport,
+) -> EarlyTimerInterruptDispatchReport {
+    let tick = record_early_timer_tick(config);
+    let ack = acknowledge_early_timer_interrupt(config);
+    EarlyTimerInterruptDispatchReport { tick, ack }
+}
+
 /// Number of architectural exception vectors reserved at boot.
 pub const EXCEPTION_VECTOR_COUNT: usize = 32;
 
@@ -1409,11 +1467,13 @@ mod tests {
         boot_heap_alloc_cycle_line_bytes, boot_heap_bootstrap_line_bytes,
         boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
         boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
-        boot_timer_first_tick_line_bytes, boot_timer_init_line_bytes, bootstrap_early_kernel_heap,
-        dispatch_exception, early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
-        early_physical_memory_map, early_translation_state_valid, exception_log_line,
-        exception_log_line_bytes, init_early_global_allocator, init_early_interrupts,
-        init_early_paging_plan, init_early_physical_memory, init_early_timer, install_early_paging,
+        boot_timer_ack_line_bytes, boot_timer_first_tick_line_bytes, boot_timer_init_line_bytes,
+        boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
+        dispatch_early_timer_interrupt, dispatch_exception, early_idt_descriptor,
+        early_idt_entries, early_paging_table_snapshot, early_physical_memory_map,
+        early_translation_state_valid, exception_log_line, exception_log_line_bytes,
+        init_early_global_allocator, init_early_interrupts, init_early_paging_plan,
+        init_early_physical_memory, init_early_timer, install_early_paging,
         is_canonical_virtual_address, is_page_aligned_4k, record_early_timer_tick,
         reset_early_timer_ticks, run_early_global_allocator_probe, run_early_heap_alloc_cycle,
         translate_early_virtual_to_physical, EarlyFrameAllocationError, EarlyFrameAllocator,
@@ -1423,8 +1483,9 @@ mod tests {
         BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE,
         BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
         BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
-        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_INIT_LINE,
-        EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
+        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE,
+        BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR,
+        EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -2059,6 +2120,47 @@ mod tests {
         assert_eq!(second.uptime_ns, 20_000_000);
 
         reset_early_timer_ticks();
+    }
+
+    #[test]
+    fn timer_ack_and_multi_tick_dispatch_report_expected_contracts() {
+        reset_early_timer_ticks();
+        let timer = init_early_timer();
+
+        let first = dispatch_early_timer_interrupt(timer);
+        let second = dispatch_early_timer_interrupt(timer);
+        let third = dispatch_early_timer_interrupt(timer);
+
+        assert_eq!(first.tick.tick_count, 1);
+        assert_eq!(second.tick.tick_count, 2);
+        assert_eq!(third.tick.tick_count, 3);
+        assert_eq!(third.tick.uptime_ns, 30_000_000);
+        assert_eq!(third.ack.irq_vector, 0x20);
+        assert_eq!(third.ack.pic_command_port, 0x20);
+        assert_eq!(third.ack.pic_eoi_value, 0x20);
+        assert!(third.ack.acknowledged);
+
+        reset_early_timer_ticks();
+    }
+
+    #[test]
+    fn timer_ack_and_multi_tick_lines_include_crlf() {
+        assert_eq!(
+            BOOT_TIMER_THIRD_TICK_LINE,
+            "tosm-os: timer tick irq=0x20 count=3 uptime_ns=30000000\r\n"
+        );
+        assert_eq!(
+            boot_timer_third_tick_line_bytes(),
+            b"tosm-os: timer tick irq=0x20 count=3 uptime_ns=30000000\r\n"
+        );
+        assert_eq!(
+            BOOT_TIMER_ACK_LINE,
+            "tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20\r\n"
+        );
+        assert_eq!(
+            boot_timer_ack_line_bytes(),
+            b"tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20\r\n"
+        );
     }
 
     #[test]
