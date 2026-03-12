@@ -187,101 +187,101 @@ Do not claim success without checking whether the code still builds.
 
 If validation fails:
 
-fix the failure if reasonably possible in the same run
+- fix the failure if reasonably possible in the same run
 
-avoid introducing unrelated changes
+- avoid introducing unrelated changes
 
-leave the repository in a more working state than before
+- leave the repository in a more working state than before
 
 If a full fix is not possible, prioritize:
 
-restoring buildability
+- restoring buildability
 
-isolating unfinished code
+- isolating unfinished code
 
-documenting the blocker clearly
+- documenting the blocker clearly
 
 Do not leave the repo in a knowingly broken state unless the user explicitly asked for exploratory changes.
 
-Status tracking
+## Status tracking
 
 If docs/status/ exists, treat it as the progress ledger.
 
 When completing a milestone or materially advancing one:
 
-update the relevant status file
+- update the relevant status file
 
-mark completed milestones clearly
+- mark completed milestones clearly
 
-note the next target milestone
+- note the next target milestone
 
-keep entries concise and factual
+- keep entries concise and factual
 
-Do not spam status files with trivial updates.
+- Do not spam status files with trivial updates.
 
-Status updates should reflect real progress, not intent alone.
+- Status updates should reflect real progress, not intent alone.
 
-Coding rules
+## Coding rules
 
 Prefer:
 
-small, clear modules
+- small, clear modules
 
-explicit names
+- explicit names
 
-simple control flow
+- simple control flow
 
-minimal unsafe surface area
+- minimal unsafe surface area
 
-comments where hardware or boot assumptions matter
+- comments where hardware or boot assumptions matter
 
-integration with existing repo style
+- integration with existing repo style
 
 Avoid:
 
-broad rewrites with no milestone gain
+- broad rewrites with no milestone gain
 
-introducing unused abstractions
+- introducing unused abstractions
 
-duplicate subsystems
+- duplicate subsystems
 
-dead code
+- dead code
 
-placeholder-only implementations unless clearly labeled and necessary
+- placeholder-only implementations unless clearly labeled and necessary
 
-OS-specific guidance
+## OS-specific guidance
 
 For hobby OS work:
 
-choose the simplest implementation that advances the next milestone
+- choose the simplest implementation that advances the next milestone
 
-prefer reliable debug output early
+- prefer reliable debug output early
 
-prioritize boot/debug/interrupt/memory/input before advanced features
+- prioritize boot/debug/interrupt/memory/input before advanced features
 
-keep architecture assumptions explicit
+- keep architecture assumptions explicit
 
-document unsafe and low-level invariants near the code
+- document unsafe and low-level invariants near the code
 
-When choosing between elegance and bootable progress, prefer bootable progress.
+- When choosing between elegance and bootable progress, prefer bootable progress.
 
-Repo navigation hints
+## Repo navigation hints
 
 Agents should quickly identify and understand:
 
-bootloader or boot entry code
+- bootloader or boot entry code
 
-kernel entry and init path
+- kernel entry and init path
 
-memory initialization
+- memory initialization
 
-interrupt descriptor setup
+- interrupt descriptor setup
 
-device input path
+- device input path
 
-build pipeline
+- build pipeline
 
-emulator / smoke-test tooling
+- emulator / smoke-test tooling
 
 If the repo uses architecture folders, inspect those before changing cross-cutting code.
 
