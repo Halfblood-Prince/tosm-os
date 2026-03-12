@@ -133,25 +133,24 @@ run_qemu_smoke() {
     exit 1
   fi
 
-  local run_dir
-  run_dir="$(mktemp -d)"
-  trap 'rm -rf "${run_dir}"' EXIT
-  mkdir -p "${run_dir}/EFI/BOOT"
-  cp "${efi_path}" "${run_dir}/EFI/BOOT/BOOTX64.EFI"
+  SMOKE_RUN_DIR="$(mktemp -d)"
+  trap 'rm -rf "${SMOKE_RUN_DIR}"' EXIT
+  mkdir -p "${SMOKE_RUN_DIR}/EFI/BOOT"
+  cp "${efi_path}" "${SMOKE_RUN_DIR}/EFI/BOOT/BOOTX64.EFI"
 
   # OVMF variable stores are mutable. Always use a temp copy so each run is deterministic
   # and never mutates global firmware state in CI workers.
-  local ovmf_vars_runtime="${run_dir}/OVMF_VARS.fd"
+  local ovmf_vars_runtime="${SMOKE_RUN_DIR}/OVMF_VARS.fd"
   cp "${ovmf_vars}" "${ovmf_vars_runtime}"
 
-  local serial_log="${run_dir}/serial.log"
+  local serial_log="${SMOKE_RUN_DIR}/serial.log"
   timeout 20s "${qemu_bin}" \
     -nodefaults \
     -nographic \
     -serial file:"${serial_log}" \
     -drive if=pflash,format=raw,readonly=on,file="${ovmf_code}" \
     -drive if=pflash,format=raw,file="${ovmf_vars_runtime}" \
-    -drive format=raw,file=fat:rw:"${run_dir}"
+    -drive format=raw,file=fat:rw:"${SMOKE_RUN_DIR}"
 
   if ! grep --fixed-strings --quiet -- "${expected_banner}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing banner"

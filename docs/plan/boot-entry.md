@@ -48,6 +48,7 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 15. ✅ Make QEMU smoke mandatory in CI by tightening smoke-test firmware discovery, adding additional common OVMF paths, and requiring QEMU execution under CI while preserving local best-effort smoke behavior.
 16. ✅ Add smoke-script Rust target provisioning so `tools/smoke-test.sh` self-installs `x86_64-unknown-uefi` via `rustup` when missing, removing reliance on external pre-steps and fixing CI/local target-missing failures deterministically.
 17. ✅ Fix UEFI smoke duplicate-entry linking by keeping `efi_main` exported only by the `bootx64` binary and routing shared logic through a library `run_entry` helper.
+18. ✅ Fix smoke-script teardown robustness by avoiding `local run_dir` with an EXIT trap (which can leave `${run_dir}` unbound under `set -u`) and using a stable function-scope variable for temp-directory cleanup.
 
 ## Risks
 
