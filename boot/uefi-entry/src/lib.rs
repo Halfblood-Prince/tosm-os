@@ -281,11 +281,87 @@ extern crate std;
 
 #[cfg(test)]
 mod tests {
+    use core::array;
+
     use super::{
         entry_done_message_line, kernel_entry_message_line, panic_message_line, vga_cell_index,
         EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB,
-        LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
+        LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
     };
+
+    struct VgaWriterModel {
+        column: usize,
+        row: usize,
+        cells: [[u8; VGA_TEXT_COLUMNS]; VGA_TEXT_ROWS],
+    }
+
+    impl VgaWriterModel {
+        const BLANK: u8 = b' ';
+
+        fn new() -> Self {
+            Self {
+                column: 0,
+                row: 0,
+                cells: array::from_fn(|_| [Self::BLANK; VGA_TEXT_COLUMNS]),
+            }
+        }
+
+        fn init_for_boot_logs(&mut self) {
+            self.clear_screen();
+            self.column = 0;
+            self.row = 0;
+        }
+
+        fn write_all(&mut self, bytes: &[u8]) {
+            for &byte in bytes {
+                self.write_byte(byte);
+            }
+        }
+
+        fn write_byte(&mut self, byte: u8) {
+            match byte {
+                b'\n' => self.new_line(),
+                b'\r' => self.column = 0,
+                _ => {
+                    self.cells[self.row][self.column] = byte;
+                    self.column += 1;
+                    if self.column == VGA_TEXT_COLUMNS {
+                        self.new_line();
+                    }
+                }
+            }
+        }
+
+        fn new_line(&mut self) {
+            self.column = 0;
+            if self.row + 1 < VGA_TEXT_ROWS {
+                self.row += 1;
+            } else {
+                self.scroll_up_one_row();
+            }
+            self.clear_row(self.row);
+        }
+
+        fn clear_screen(&mut self) {
+            for row in 0..VGA_TEXT_ROWS {
+                self.clear_row(row);
+            }
+        }
+
+        fn clear_row(&mut self, row: usize) {
+            self.cells[row].fill(Self::BLANK);
+        }
+
+        fn scroll_up_one_row(&mut self) {
+            for row in 1..VGA_TEXT_ROWS {
+                self.cells[row - 1] = self.cells[row];
+            }
+        }
+
+        fn row_bytes(&self, row: usize) -> [u8; VGA_TEXT_COLUMNS] {
+            self.cells[row]
+        }
+    }
 
     #[test]
     fn entry_message_line_matches_kernel_banner_with_crlf() {
@@ -338,5 +414,51 @@ mod tests {
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
+    }
+
+    #[test]
+    fn model_init_clears_screen_and_resets_cursor() {
+        let mut model = VgaWriterModel::new();
+        model.write_all(b"dirty");
+        model.row = VGA_TEXT_ROWS - 1;
+        model.column = VGA_TEXT_COLUMNS - 1;
+
+        model.init_for_boot_logs();
+
+        assert_eq!(model.row, 0);
+        assert_eq!(model.column, 0);
+        for row in 0..VGA_TEXT_ROWS {
+            assert_eq!(model.row_bytes(row), [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]);
+        }
+    }
+
+    #[test]
+    fn model_newline_clears_destination_row() {
+        let mut model = VgaWriterModel::new();
+        model.init_for_boot_logs();
+        model.write_all(b"AB\n");
+
+        assert_eq!(model.row, 1);
+        assert_eq!(model.column, 0);
+        assert_eq!(model.row_bytes(0)[0..2], [b'A', b'B']);
+        assert_eq!(model.row_bytes(1), [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]);
+    }
+
+    #[test]
+    fn model_scroll_moves_rows_up_and_clears_last_row() {
+        let mut model = VgaWriterModel::new();
+        model.init_for_boot_logs();
+        model.write_all(b"A\nB\n");
+        model.row = VGA_TEXT_ROWS - 1;
+        model.column = 0;
+        model.cells[VGA_TEXT_ROWS - 2][0] = b'X';
+        model.cells[VGA_TEXT_ROWS - 1][0] = b'Y';
+
+        model.write_all(b"Z\n");
+
+        assert_eq!(model.row, VGA_TEXT_ROWS - 1);
+        assert_eq!(model.column, 0);
+        assert_eq!(model.row_bytes(VGA_TEXT_ROWS - 2)[0], b'Z');
+        assert_eq!(model.row_bytes(VGA_TEXT_ROWS - 1), [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]);
     }
 }

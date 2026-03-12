@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: serial and screen output
-- Subtask: make VGA boot output deterministic by initializing screen state and replacing row wraparound with explicit scroll + row clear behavior
-- Status: completed (added explicit VGA init/clear behavior plus deterministic newline handling that clears destination rows and scrolls upward at the bottom)
+- Subtask: add a host-testable VGA writer model that validates deterministic init/newline/scroll behavior without touching memory-mapped VGA hardware
+- Status: completed (added an in-test VGA writer model and assertions for init screen clear, newline row clearing, and bottom-row scroll semantics)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: implemented deterministic VGA row management in `boot/uefi-entry` by clearing the text buffer at entry, clearing each destination row on newline, and scrolling screen contents upward at the bottom instead of wrapping to row 0.
-- Next slice: continue milestone 2 by adding a small host-testable VGA writer model in `boot/uefi-entry` tests so newline/scroll semantics are validated independent of hardware memory side effects.
+- Completed slice: added a host-testable `VgaWriterModel` in `boot/uefi-entry` tests and covered three deterministic behaviors: boot-log init clears screen + resets cursor, newline clears destination row, and bottom-row newline scrolls upward then clears the last row.
+- Next slice: continue milestone 2 by extending on-screen diagnostics to cover the early panic path (mirror canonical panic line to VGA in addition to serial) while preserving deterministic row behavior.
 
 <!-- ci-status:start -->
 ## Latest CI automation

@@ -51,6 +51,7 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 18. ✅ Fix smoke-script teardown robustness by avoiding `local run_dir` with an EXIT trap (which can leave `${run_dir}` unbound under `set -u`) and using a stable function-scope variable for temp-directory cleanup.
 19. ✅ Add a minimal VGA text-mode writer in `boot/uefi-entry` and mirror canonical kernel banner/completion lines to on-screen output alongside COM1 serial logs.
 20. ✅ Add deterministic VGA row lifecycle handling by clearing the screen at boot-log start and scrolling upward (instead of wrapping) when output reaches the last text row.
+21. ✅ Add host-testable VGA writer model tests in `boot/uefi-entry` to validate init/newline/scroll semantics independent of memory-mapped hardware side effects.
 
 ## Risks
 
