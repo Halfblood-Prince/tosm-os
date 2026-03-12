@@ -86,6 +86,10 @@ pub const BOOT_THREAD_CONTEXT_SAVE_LINE: &str =
 pub const BOOT_THREAD_CONTEXT_RESTORE_LINE: &str =
     "tosm-os: thread ctx restore to=2 rip=0x200000 rsp=0x402000\r\n";
 
+/// Canonical thread-ctx-meta line emitted when handoff cause and queue metadata are sampled.
+pub const BOOT_THREAD_CONTEXT_META_LINE: &str =
+    "tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -216,6 +220,12 @@ pub const fn boot_thread_context_save_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_thread_context_restore_line_bytes() -> &'static [u8] {
     BOOT_THREAD_CONTEXT_RESTORE_LINE.as_bytes()
+}
+
+/// Returns the canonical thread-ctx-meta line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_context_meta_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_CONTEXT_META_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -484,6 +494,16 @@ pub struct EarlyThreadContextHandoffReport {
     pub to_task_id: u32,
     pub saved: EarlyThreadContext,
     pub restored: EarlyThreadContext,
+    pub metadata: EarlyThreadContextSwitchMetadata,
+}
+
+/// Deterministic context-switch metadata emitted alongside modeled save/restore snapshots.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyThreadContextSwitchMetadata {
+    pub reason: EarlySchedulerHandoffReason,
+    pub timer_tick: u64,
+    pub run_queue_depth: usize,
+    pub queue_watermark: usize,
 }
 
 /// Errors returned by deterministic early thread context handoff helpers.
@@ -527,6 +547,7 @@ const EARLY_BOOTSTRAP_TASK_ID: u32 = 1;
 static EARLY_TIMER_TICK_COUNT: AtomicU64 = AtomicU64::new(0);
 static EARLY_TIMER_LAST_HANDOFF_TICK: AtomicU64 = AtomicU64::new(0);
 static EARLY_SCHEDULER_SELECTED_INDEX: AtomicU64 = AtomicU64::new(0);
+static EARLY_SCHEDULER_QUEUE_WATERMARK: AtomicU64 = AtomicU64::new(2);
 static mut EARLY_SCHEDULER_SLOTS: [EarlySchedulerSlot; EARLY_SCHEDULER_MAX_SLOTS] =
     [EarlySchedulerSlot {
         task_id: 0,
@@ -1256,6 +1277,7 @@ pub fn reset_early_scheduler_state() {
     }
 
     EARLY_SCHEDULER_SELECTED_INDEX.store(0, Ordering::SeqCst);
+    EARLY_SCHEDULER_QUEUE_WATERMARK.store(2, Ordering::SeqCst);
 }
 
 /// Records a deterministic early timer tick and reports cumulative periodic accounting state.
@@ -1409,6 +1431,11 @@ pub fn enqueue_early_scheduler_task(
                     runnable: true,
                 };
                 let snapshot = sample_early_scheduler_snapshot(EarlySchedulerHandoffReason::Yield);
+                let observed_depth = snapshot.run_queue_depth as u64;
+                let previous = EARLY_SCHEDULER_QUEUE_WATERMARK.load(Ordering::SeqCst);
+                if observed_depth > previous {
+                    EARLY_SCHEDULER_QUEUE_WATERMARK.store(observed_depth, Ordering::SeqCst);
+                }
                 return Ok(EarlySchedulerMutationReport {
                     task_id,
                     run_queue_depth: snapshot.run_queue_depth,
@@ -1497,6 +1524,7 @@ const fn modeled_thread_context(task_id: u32) -> EarlyThreadContext {
 /// Models deterministic per-thread ctx save/restore records for scheduler handoff paths.
 pub fn model_early_thread_context_handoff(
     next_task_id: u32,
+    reason: EarlySchedulerHandoffReason,
 ) -> Result<EarlyThreadContextHandoffReport, EarlyThreadContextHandoffError> {
     let selected_index = EARLY_SCHEDULER_SELECTED_INDEX.load(Ordering::SeqCst) as usize;
     if selected_index >= EARLY_SCHEDULER_MAX_SLOTS {
@@ -1522,11 +1550,20 @@ pub fn model_early_thread_context_handoff(
     // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
     let to_slot = unsafe { EARLY_SCHEDULER_SLOTS[to_index] };
 
+    let snapshot = sample_early_scheduler_snapshot(reason);
+    let metadata = EarlyThreadContextSwitchMetadata {
+        reason,
+        timer_tick: EARLY_TIMER_TICK_COUNT.load(Ordering::SeqCst),
+        run_queue_depth: snapshot.run_queue_depth,
+        queue_watermark: EARLY_SCHEDULER_QUEUE_WATERMARK.load(Ordering::SeqCst) as usize,
+    };
+
     Ok(EarlyThreadContextHandoffReport {
         from_task_id: from_slot.task_id,
         to_task_id: to_slot.task_id,
         saved: modeled_thread_context(from_slot.task_id),
         restored: modeled_thread_context(to_slot.task_id),
+        metadata,
     })
 }
 
@@ -1877,8 +1914,9 @@ mod tests {
         boot_heap_bootstrap_line_bytes, boot_interrupt_init_line_bytes,
         boot_memory_init_line_bytes, boot_paging_install_line_bytes, boot_paging_plan_line_bytes,
         boot_panic_line_bytes, boot_scheduler_handoff_line_bytes,
-        boot_thread_context_restore_line_bytes, boot_thread_context_save_line_bytes,
-        boot_thread_dequeue_line_bytes, boot_thread_enqueue_line_bytes, boot_timer_ack_line_bytes,
+        boot_thread_context_meta_line_bytes, boot_thread_context_restore_line_bytes,
+        boot_thread_context_save_line_bytes, boot_thread_dequeue_line_bytes,
+        boot_thread_enqueue_line_bytes, boot_timer_ack_line_bytes,
         boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
         boot_timer_init_line_bytes, boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
         dequeue_early_scheduler_task, dispatch_early_timer_interrupt, dispatch_exception,
@@ -1898,10 +1936,11 @@ mod tests {
         BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
         BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
         BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_SCHEDULER_HANDOFF_LINE,
-        BOOT_THREAD_CONTEXT_RESTORE_LINE, BOOT_THREAD_CONTEXT_SAVE_LINE, BOOT_THREAD_DEQUEUE_LINE,
-        BOOT_THREAD_ENQUEUE_LINE, BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE,
-        BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE,
-        EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
+        BOOT_THREAD_CONTEXT_META_LINE, BOOT_THREAD_CONTEXT_RESTORE_LINE,
+        BOOT_THREAD_CONTEXT_SAVE_LINE, BOOT_THREAD_DEQUEUE_LINE, BOOT_THREAD_ENQUEUE_LINE,
+        BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE,
+        BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR,
+        EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -2705,6 +2744,14 @@ mod tests {
             boot_thread_context_restore_line_bytes(),
             b"tosm-os: thread ctx restore to=2 rip=0x200000 rsp=0x402000\r\n"
         );
+        assert_eq!(
+            BOOT_THREAD_CONTEXT_META_LINE,
+            "tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3\r\n"
+        );
+        assert_eq!(
+            boot_thread_context_meta_line_bytes(),
+            b"tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3\r\n"
+        );
     }
 
     #[test]
@@ -2713,15 +2760,30 @@ mod tests {
         enqueue_early_scheduler_task(2).expect("enqueue should add worker task");
         let _ = advance_early_scheduler_round_robin(super::EarlySchedulerHandoffReason::Yield);
 
-        let handoff = model_early_thread_context_handoff(2)
-            .expect("context handoff should succeed for runnable target");
+        reset_early_timer_ticks();
+        let timer = init_early_timer();
+        let _first = dispatch_early_timer_interrupt(timer);
+        let _second = dispatch_early_timer_interrupt(timer);
+        let _third = dispatch_early_timer_interrupt(timer);
+
+        let handoff =
+            model_early_thread_context_handoff(2, super::EarlySchedulerHandoffReason::Yield)
+                .expect("context handoff should succeed for runnable target");
         assert_eq!(handoff.from_task_id, 1);
         assert_eq!(handoff.to_task_id, 2);
         assert_eq!(handoff.saved.instruction_pointer, 0x0000_0000_0010_0200);
         assert_eq!(handoff.saved.stack_pointer, 0x0000_0000_0040_1f00);
         assert_eq!(handoff.restored.instruction_pointer, 0x0000_0000_0020_0000);
         assert_eq!(handoff.restored.stack_pointer, 0x0000_0000_0040_2000);
+        assert_eq!(
+            handoff.metadata.reason,
+            super::EarlySchedulerHandoffReason::Yield
+        );
+        assert_eq!(handoff.metadata.timer_tick, 3);
+        assert_eq!(handoff.metadata.run_queue_depth, 3);
+        assert_eq!(handoff.metadata.queue_watermark, 3);
 
+        reset_early_timer_ticks();
         reset_early_scheduler_state();
     }
 

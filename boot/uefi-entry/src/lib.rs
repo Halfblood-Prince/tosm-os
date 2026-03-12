@@ -357,6 +357,12 @@ pub const fn thread_context_restore_message_line() -> &'static [u8] {
     kernel::boot_thread_context_restore_line_bytes()
 }
 
+/// Returns deterministic thread-ctx metadata line expected for scheduler handoff cause/state.
+#[must_use]
+pub const fn thread_context_meta_message_line() -> &'static [u8] {
+    kernel::boot_thread_context_meta_line_bytes()
+}
+
 /// Returns the deterministic exception line expected from early dispatch logging.
 #[must_use]
 pub fn exception_message_line(vector: u8) -> &'static [u8] {
@@ -453,11 +459,15 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
     let _round_robin =
         kernel::advance_early_scheduler_round_robin(kernel::EarlySchedulerHandoffReason::Yield);
 
-    if kernel::model_early_thread_context_handoff(2).is_ok() {
+    if kernel::model_early_thread_context_handoff(2, kernel::EarlySchedulerHandoffReason::Yield)
+        .is_ok()
+    {
         serial.write_all(thread_context_save_message_line());
         screen.write_all(thread_context_save_message_line());
         serial.write_all(thread_context_restore_message_line());
         screen.write_all(thread_context_restore_message_line());
+        serial.write_all(thread_context_meta_message_line());
+        screen.write_all(thread_context_meta_message_line());
     }
 
     if kernel::dequeue_early_scheduler_task(2).is_ok() {
@@ -497,12 +507,13 @@ mod tests {
         global_allocator_ready_message_line, heap_alloc_cycle_message_line,
         heap_bootstrap_message_line, interrupt_init_message_line, kernel_entry_message_line,
         memory_init_message_line, paging_install_message_line, paging_plan_message_line,
-        panic_message_line, scheduler_handoff_message_line, thread_context_restore_message_line,
-        thread_context_save_message_line, thread_dequeue_message_line, thread_enqueue_message_line,
-        timer_ack_message_line, timer_first_tick_message_line, timer_handoff_message_line,
-        timer_init_message_line, timer_third_tick_message_line, vga_cell_index, EfiStatus,
-        BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY,
-        VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
+        panic_message_line, scheduler_handoff_message_line, thread_context_meta_message_line,
+        thread_context_restore_message_line, thread_context_save_message_line,
+        thread_dequeue_message_line, thread_enqueue_message_line, timer_ack_message_line,
+        timer_first_tick_message_line, timer_handoff_message_line, timer_init_message_line,
+        timer_third_tick_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400,
+        LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
+        VGA_TEXT_ROWS,
     };
 
     struct VgaWriterModel {
@@ -747,6 +758,14 @@ mod tests {
     }
 
     #[test]
+    fn thread_context_meta_message_line_matches_kernel_canonical_context_line() {
+        assert_eq!(
+            thread_context_meta_message_line(),
+            b"tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3\r\n"
+        );
+    }
+
+    #[test]
     fn efi_status_success_value_is_zero() {
         assert_eq!(EfiStatus::SUCCESS.0, 0);
     }
@@ -854,10 +873,11 @@ mod tests {
         model.write_all(thread_enqueue_message_line());
         model.write_all(thread_context_save_message_line());
         model.write_all(thread_context_restore_message_line());
+        model.write_all(thread_context_meta_message_line());
         model.write_all(thread_dequeue_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 21);
+        assert_eq!(model.row, 22);
         assert_eq!(model.column, 0);
         assert_eq!(
             model.row_text_without_trailing_blanks(0),
@@ -937,14 +957,18 @@ mod tests {
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(19),
-            b"tosm-os: thread dequeue task=2 runq=2 selected=1"
+            b"tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3"
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(20),
+            b"tosm-os: thread dequeue task=2 runq=2 selected=1"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(21),
             b"tosm-os: efi_main completed"
         );
         assert_eq!(
-            model.row_bytes(21),
+            model.row_bytes(22),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
         );
     }
@@ -970,6 +994,7 @@ mod tests {
         model.write_all(thread_enqueue_message_line());
         model.write_all(thread_context_save_message_line());
         model.write_all(thread_context_restore_message_line());
+        model.write_all(thread_context_meta_message_line());
         model.write_all(thread_dequeue_message_line());
         model.write_all(entry_done_message_line());
 
@@ -1041,6 +1066,10 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: thread dequeue task=2 runq=2 selected=1"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
