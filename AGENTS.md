@@ -170,7 +170,7 @@ Rust validation flow:
 cargo fmt --all
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all --verbose
-cargo build --workspace --verbose
+cargo build --workspace --verbose```
 
 If this repo uses a different command set, use the repo’s actual commands.
 
