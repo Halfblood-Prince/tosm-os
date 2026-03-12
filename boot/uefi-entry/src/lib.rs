@@ -365,12 +365,13 @@ mod tests {
             self.cells[row]
         }
 
-        fn row_text_prefix(&self, row: usize) -> &[u8] {
+        fn row_text_without_trailing_blanks(&self, row: usize) -> &[u8] {
             let row_bytes = &self.cells[row];
             let end = row_bytes
                 .iter()
-                .position(|byte| *byte == Self::BLANK)
-                .unwrap_or(VGA_TEXT_COLUMNS);
+                .rposition(|byte| *byte != Self::BLANK)
+                .map(|index| index + 1)
+                .unwrap_or(0);
             &row_bytes[..end]
         }
     }
@@ -460,8 +461,14 @@ mod tests {
 
         assert_eq!(model.row, 2);
         assert_eq!(model.column, 0);
-        assert_eq!(model.row_text_prefix(0), b"tosm-os: kernel entry reached");
-        assert_eq!(model.row_text_prefix(1), b"tosm-os: efi_main completed");
+        assert_eq!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: kernel entry reached"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(1),
+            b"tosm-os: efi_main completed"
+        );
         assert_eq!(
             model.row_bytes(2),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
@@ -480,12 +487,18 @@ mod tests {
 
         assert_eq!(model.row, 1);
         assert_eq!(model.column, 0);
-        assert_eq!(model.row_text_prefix(0), b"tosm-os: panic in uefi-entry");
+        assert_eq!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: panic in uefi-entry"
+        );
         assert_ne!(
-            model.row_text_prefix(0),
+            model.row_text_without_trailing_blanks(0),
             b"tosm-os: kernel entry reached"
         );
-        assert_ne!(model.row_text_prefix(0), b"tosm-os: efi_main completed");
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: efi_main completed"
+        );
         assert_eq!(
             model.row_bytes(1),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]

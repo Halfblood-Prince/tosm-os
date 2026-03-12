@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: serial and screen output
-- Subtask: add host-testable VGA transcript ordering coverage for banner/completion and panic-path reinitialization invariants
-- Status: completed (added deterministic VGA transcript model tests that assert banner/completion ordering and panic-path screen reset behavior)
+- Subtask: fix CI-reported VGA transcript ordering assertions that truncated canonical lines at the first internal blank
+- Status: completed (replaced first-blank prefix extraction with trailing-blank trimming so transcript assertions preserve internal spaces and align with canonical literals)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: added host-testable VGA transcript ordering tests in `boot/uefi-entry` that validate boot banner/completion row placement and panic-path reinitialization invariants for deterministic serial/screen parity evolution.
-- Next slice: enforce canonical boot-screen transcript contracts in smoke automation so CI validates line ordering semantics in addition to literal presence checks.
+- Completed slice: fixed CI format+test failures by replacing the VGA test helper's first-blank prefix extraction with trailing-blank trimming and updating transcript assertions to compare full canonical row text (including internal spaces).
+- Next slice: enforce canonical boot-screen transcript contracts in smoke automation so CI validates line ordering semantics in addition to literal presence checks once this CI repair lands and reruns.
 
 <!-- ci-status:start -->
 ## Latest CI automation

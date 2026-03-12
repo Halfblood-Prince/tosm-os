@@ -54,6 +54,7 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 21. ✅ Add host-testable VGA writer model tests in `boot/uefi-entry` to validate init/newline/scroll semantics independent of memory-mapped hardware side effects.
 22. ✅ Mirror the canonical early-boot panic line to VGA text output (after deterministic screen init) in the UEFI panic handler so panic diagnostics stay aligned across serial and screen channels.
 23. ✅ Add host-testable VGA transcript ordering tests that validate boot banner/completion row ordering and panic-path screen reinitialization invariants.
+24. ✅ Repair VGA transcript model assertions by trimming only trailing blank cells (instead of splitting at first blank) so canonical row lines with internal spaces compare correctly and CI fmt/tests pass.
 
 ## Risks
 
