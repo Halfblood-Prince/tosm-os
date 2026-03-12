@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: paging / virtual memory
-- Subtask: materialize deterministic early page tables and install hooks from paging plan contracts.
+- Subtask: establish minimal virtual-memory translation helpers and guards for allocator-facing APIs.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -28,7 +28,8 @@
 - Completed slice: updated `tools/smoke-test.sh` to verify deterministic serial transcript contracts before honoring QEMU exit status, so CI-required smoke runs now pass when the expected boot transcript is complete even if QEMU aborts during shutdown with the known iothread assertion.
 - Completed slice: raised QEMU smoke timeout default from 20s to a configurable `QEMU_TIMEOUT_SECS` (default 45s), and emit an explicit timeout diagnostic before transcript assertions so slower CI boots can still produce the required paging-install line.
 - Completed slice: switched smoke QEMU default acceleration args from `-accel tcg,thread=single` to `-accel tcg` to avoid the observed iothread assertion crash path in CI runners while preserving `QEMU_ACCEL_ARGS` override behavior.
-- Next slice: begin a minimal virtual-memory API surface (address translation helpers + guard checks) to unblock allocator bring-up.
+- Completed slice: added kernel-level virtual-memory helpers (`VirtualAddress`/`PhysicalAddress`) with canonical-address validation, 4KiB alignment/state guards, and deterministic early identity-map translation contracts to unblock allocator bring-up.
+- Next slice: integrate the translation helper surface into an initial kernel allocator frame-selection API.
 
 <!-- ci-status:start -->
 ## Latest CI automation
