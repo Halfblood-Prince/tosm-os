@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: fix CI format failure for canonical boot banner line assertions
-- Status: ready_for_ci (awaiting CI run on rustfmt-only assertion reflow)
+- Subtask: initialize COM1 UART defaults before boot banner transmit
+- Status: in_progress (UART init slice implemented; awaiting CI run)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria

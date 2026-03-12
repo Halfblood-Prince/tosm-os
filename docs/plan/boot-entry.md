@@ -37,6 +37,7 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 5. ✅ Wire scripts into `make` targets.
 6. ✅ Update README and status docs for each slice.
 7. ✅ Centralize the CRLF-terminated banner line in `kernel` and consume it from `boot/uefi-entry`.
+8. ✅ Initialize COM1 UART line settings in `boot/uefi-entry` before transmitting banner bytes.
 
 ## Risks
 
