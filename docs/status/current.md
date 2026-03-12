@@ -25,6 +25,7 @@
 - Completed slice: materialized deterministic early paging structures (PML4/PDPT/PD) from the paging plan, populated 1GiB identity coverage via 2MiB PDEs, and added an early CR3 install hook (UEFI/x86_64 only) with host-side snapshot tests.
 - Completed slice: integrated a canonical paging-install boot transcript line across kernel contracts, UEFI serial/VGA output, and smoke checks so boot ordering is now banner -> idt init -> exception vector 14 -> memory init -> paging plan -> paging install -> completion.
 - Completed slice: hardened `tools/smoke-test.sh` QEMU execution to run with deterministic TCG single-thread acceleration by default, support override via `QEMU_ACCEL_ARGS`, and gracefully skip runtime serial assertions for local non-required QEMU failures while preserving strict CI failure behavior under `REQUIRE_QEMU_SMOKE=1`.
+- Completed slice: updated `tools/smoke-test.sh` to verify deterministic serial transcript contracts before honoring QEMU exit status, so CI-required smoke runs now pass when the expected boot transcript is complete even if QEMU aborts during shutdown with the known iothread assertion.
 - Next slice: begin a minimal virtual-memory API surface (address translation helpers + guard checks) to unblock allocator bring-up.
 
 <!-- ci-status:start -->
