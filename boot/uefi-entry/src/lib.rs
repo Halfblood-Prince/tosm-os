@@ -428,7 +428,10 @@ mod tests {
         assert_eq!(model.row, 0);
         assert_eq!(model.column, 0);
         for row in 0..VGA_TEXT_ROWS {
-            assert_eq!(model.row_bytes(row), [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]);
+            assert_eq!(
+                model.row_bytes(row),
+                [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
+            );
         }
     }
 
@@ -441,7 +444,10 @@ mod tests {
         assert_eq!(model.row, 1);
         assert_eq!(model.column, 0);
         assert_eq!(model.row_bytes(0)[0..2], [b'A', b'B']);
-        assert_eq!(model.row_bytes(1), [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]);
+        assert_eq!(
+            model.row_bytes(1),
+            [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
+        );
     }
 
     #[test]
@@ -459,6 +465,9 @@ mod tests {
         assert_eq!(model.row, VGA_TEXT_ROWS - 1);
         assert_eq!(model.column, 0);
         assert_eq!(model.row_bytes(VGA_TEXT_ROWS - 2)[0], b'Z');
-        assert_eq!(model.row_bytes(VGA_TEXT_ROWS - 1), [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]);
+        assert_eq!(
+            model.row_bytes(VGA_TEXT_ROWS - 1),
+            [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
+        );
     }
 }

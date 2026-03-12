@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: serial and screen output
-- Subtask: add a host-testable VGA writer model that validates deterministic init/newline/scroll behavior without touching memory-mapped VGA hardware
-- Status: completed (added an in-test VGA writer model and assertions for init screen clear, newline row clearing, and bottom-row scroll semantics)
+- Subtask: fix CI formatting failure in the host-testable VGA writer model tests so formatting job can pass again
+- Status: completed (rewrapped long `assert_eq!` calls in `boot/uefi-entry` VGA model tests to the rustfmt-preferred multiline layout reported by CI)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,7 +15,7 @@
 
 ## Progress update
 
-- Completed slice: added a host-testable `VgaWriterModel` in `boot/uefi-entry` tests and covered three deterministic behaviors: boot-log init clears screen + resets cursor, newline clears destination row, and bottom-row newline scrolls upward then clears the last row.
+- Completed slice: resolved the smallest concrete CI failure (format job) by applying the rustfmt-expected multiline formatting to long VGA model test assertions in `boot/uefi-entry/src/lib.rs`.
 - Next slice: continue milestone 2 by extending on-screen diagnostics to cover the early panic path (mirror canonical panic line to VGA in addition to serial) while preserving deterministic row behavior.
 
 <!-- ci-status:start -->
