@@ -1,21 +1,21 @@
 {
   "workflow": "CI",
-  "run_id": "23017626615",
+  "run_id": "23018066734",
   "run_attempt": "1",
-  "conclusion": "failure",
+  "conclusion": "success",
   "head_branch": "main",
-  "head_sha": "e0f5f5380a33e2f1ec8666f154fa3b4243c9a300",
+  "head_sha": "6e456025013cad40fcbfee5fc3039aee91a9d8b8",
   "event": "push",
-  "run_url": "https://github.com/Halfblood-Prince/tosm-os/actions/runs/23017626615",
-  "updated_at": "2026-03-12T18:29:11Z",
+  "run_url": "https://github.com/Halfblood-Prince/tosm-os/actions/runs/23018066734",
+  "updated_at": "2026-03-12T18:40:47Z",
   "job_results": {
     "format": "success",
     "clippy": "success",
     "tests": "success",
     "build": "success",
-    "smoke": "failure"
+    "smoke": "success"
   },
-  "codex_next_action": "fix the smallest concrete failure from the latest CI excerpts before adding new scope",
+  "codex_next_action": "continue the next unfinished milestone slice; do not redo already-green validation work",
   "reports": {
     "rust_checks": "docs/status/reports/rust-checks.md",
     "boot_smoke": "docs/status/reports/boot-smoke.md"
