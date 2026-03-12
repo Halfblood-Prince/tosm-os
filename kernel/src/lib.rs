@@ -64,6 +64,10 @@ pub const BOOT_TIMER_THIRD_TICK_LINE: &str =
 /// Canonical timer-ack line emitted when the timer IRQ is acknowledged through the PIC path.
 pub const BOOT_TIMER_ACK_LINE: &str = "tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20\r\n";
 
+/// Canonical timer-handoff line emitted when timer state is consumed for scheduler integration.
+pub const BOOT_TIMER_HANDOFF_LINE: &str =
+    "tosm-os: timer handoff ticks=3 delta=3 quantum=1 uptime_ns=30000000\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -158,6 +162,12 @@ pub const fn boot_timer_third_tick_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_timer_ack_line_bytes() -> &'static [u8] {
     BOOT_TIMER_ACK_LINE.as_bytes()
+}
+
+/// Returns the canonical timer-handoff line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_timer_handoff_line_bytes() -> &'static [u8] {
+    BOOT_TIMER_HANDOFF_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -363,6 +373,16 @@ pub struct EarlyTimerInterruptDispatchReport {
     pub ack: EarlyTimerAckReport,
 }
 
+/// Deterministic timer state snapshot consumed by early scheduler handoff paths.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyTimerHandoffReport {
+    pub irq_vector: u8,
+    pub total_ticks: u64,
+    pub ticks_since_last_handoff: u64,
+    pub uptime_ns: u64,
+    pub scheduler_quantum_elapsed: bool,
+}
+
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
 pub const EARLY_PAGING_FRAME_WINDOW_FRAMES: usize = 4;
 pub const EARLY_IDENTITY_MAP_PAGES_4K: usize = 512;
@@ -383,6 +403,7 @@ const TIMER_IRQ_VECTOR: u8 = 0x20;
 const PIC_MASTER_COMMAND_PORT: u16 = 0x20;
 const PIC_NON_SPECIFIC_EOI: u8 = 0x20;
 static EARLY_TIMER_TICK_COUNT: AtomicU64 = AtomicU64::new(0);
+static EARLY_TIMER_LAST_HANDOFF_TICK: AtomicU64 = AtomicU64::new(0);
 
 /// Returns true when a value is 4KiB aligned.
 #[must_use]
@@ -1085,6 +1106,7 @@ pub fn init_early_timer() -> EarlyTimerInitReport {
 /// Clears deterministic early timer tick-accounting state for fresh boot/test initialization.
 pub fn reset_early_timer_ticks() {
     EARLY_TIMER_TICK_COUNT.store(0, Ordering::SeqCst);
+    EARLY_TIMER_LAST_HANDOFF_TICK.store(0, Ordering::SeqCst);
 }
 
 /// Records a deterministic early timer tick and reports cumulative periodic accounting state.
@@ -1119,6 +1141,31 @@ pub fn dispatch_early_timer_interrupt(
     let tick = record_early_timer_tick(config);
     let ack = acknowledge_early_timer_interrupt(config);
     EarlyTimerInterruptDispatchReport { tick, ack }
+}
+
+/// Samples deterministic timer state for scheduler integration without consuming handoff delta.
+#[must_use]
+pub fn sample_early_timer_handoff(config: EarlyTimerInitReport) -> EarlyTimerHandoffReport {
+    let total_ticks = EARLY_TIMER_TICK_COUNT.load(Ordering::SeqCst);
+    let handoff_base = EARLY_TIMER_LAST_HANDOFF_TICK.load(Ordering::SeqCst);
+    let ticks_since_last_handoff = total_ticks.saturating_sub(handoff_base);
+    let uptime_ns = total_ticks.saturating_mul(config.tick_period_ns);
+
+    EarlyTimerHandoffReport {
+        irq_vector: config.irq_vector,
+        total_ticks,
+        ticks_since_last_handoff,
+        uptime_ns,
+        scheduler_quantum_elapsed: ticks_since_last_handoff != 0,
+    }
+}
+
+/// Consumes deterministic timer state and advances the scheduler handoff watermark.
+#[must_use]
+pub fn take_early_timer_handoff(config: EarlyTimerInitReport) -> EarlyTimerHandoffReport {
+    let report = sample_early_timer_handoff(config);
+    EARLY_TIMER_LAST_HANDOFF_TICK.store(report.total_ticks, Ordering::SeqCst);
+    report
 }
 
 /// Number of architectural exception vectors reserved at boot.
@@ -1467,8 +1514,8 @@ mod tests {
         boot_heap_alloc_cycle_line_bytes, boot_heap_bootstrap_line_bytes,
         boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
         boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
-        boot_timer_ack_line_bytes, boot_timer_first_tick_line_bytes, boot_timer_init_line_bytes,
-        boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
+        boot_timer_ack_line_bytes, boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
+        boot_timer_init_line_bytes, boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
         dispatch_early_timer_interrupt, dispatch_exception, early_idt_descriptor,
         early_idt_entries, early_paging_table_snapshot, early_physical_memory_map,
         early_translation_state_valid, exception_log_line, exception_log_line_bytes,
@@ -1476,14 +1523,15 @@ mod tests {
         init_early_physical_memory, init_early_timer, install_early_paging,
         is_canonical_virtual_address, is_page_aligned_4k, record_early_timer_tick,
         reset_early_timer_ticks, run_early_global_allocator_probe, run_early_heap_alloc_cycle,
-        translate_early_virtual_to_physical, EarlyFrameAllocationError, EarlyFrameAllocator,
-        EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
-        EarlyHeapDeallocationError, EarlyHeapOperationError, GlobalAllocatorInitError, IdtEntry,
-        PhysicalMemoryRegionKind, VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER,
-        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE,
-        BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
-        BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
-        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE,
+        sample_early_timer_handoff, take_early_timer_handoff, translate_early_virtual_to_physical,
+        EarlyFrameAllocationError, EarlyFrameAllocator, EarlyHeapAllocationError,
+        EarlyHeapAllocator, EarlyHeapBootstrapError, EarlyHeapDeallocationError,
+        EarlyHeapOperationError, GlobalAllocatorInitError, IdtEntry, PhysicalMemoryRegionKind,
+        VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER, BOOT_BANNER_LINE,
+        BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE, BOOT_GLOBAL_ALLOCATOR_READY_LINE,
+        BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE, BOOT_INTERRUPT_INIT_LINE,
+        BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE,
+        BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE,
         BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR,
         EXCEPTION_VECTOR_COUNT,
     };
@@ -2139,6 +2187,53 @@ mod tests {
         assert_eq!(third.ack.pic_command_port, 0x20);
         assert_eq!(third.ack.pic_eoi_value, 0x20);
         assert!(third.ack.acknowledged);
+
+        reset_early_timer_ticks();
+    }
+
+    #[test]
+    fn boot_timer_handoff_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_TIMER_HANDOFF_LINE,
+            "tosm-os: timer handoff ticks=3 delta=3 quantum=1 uptime_ns=30000000\r\n"
+        );
+        assert_eq!(
+            boot_timer_handoff_line_bytes(),
+            b"tosm-os: timer handoff ticks=3 delta=3 quantum=1 uptime_ns=30000000\r\n"
+        );
+    }
+
+    #[test]
+    fn timer_handoff_sampling_and_take_track_delta_watermark() {
+        reset_early_timer_ticks();
+        let timer = init_early_timer();
+
+        let before_ticks = sample_early_timer_handoff(timer);
+        assert_eq!(before_ticks.total_ticks, 0);
+        assert_eq!(before_ticks.ticks_since_last_handoff, 0);
+        assert_eq!(before_ticks.uptime_ns, 0);
+        assert!(!before_ticks.scheduler_quantum_elapsed);
+
+        let _first = dispatch_early_timer_interrupt(timer);
+        let _second = dispatch_early_timer_interrupt(timer);
+        let _third = dispatch_early_timer_interrupt(timer);
+
+        let sampled = sample_early_timer_handoff(timer);
+        assert_eq!(sampled.irq_vector, 0x20);
+        assert_eq!(sampled.total_ticks, 3);
+        assert_eq!(sampled.ticks_since_last_handoff, 3);
+        assert_eq!(sampled.uptime_ns, 30_000_000);
+        assert!(sampled.scheduler_quantum_elapsed);
+
+        let handoff = take_early_timer_handoff(timer);
+        assert_eq!(handoff.total_ticks, 3);
+        assert_eq!(handoff.ticks_since_last_handoff, 3);
+        assert!(handoff.scheduler_quantum_elapsed);
+
+        let after = sample_early_timer_handoff(timer);
+        assert_eq!(after.total_ticks, 3);
+        assert_eq!(after.ticks_since_last_handoff, 0);
+        assert!(!after.scheduler_quantum_elapsed);
 
         reset_early_timer_ticks();
     }
