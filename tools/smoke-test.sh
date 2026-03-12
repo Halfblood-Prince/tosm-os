@@ -11,6 +11,7 @@ expected_memory_init='tosm-os: memory init usable=0x3f790000 reserved=0x00811000
 expected_paging_plan='tosm-os: paging plan frames=4 window=0x3f7ed000-0x3f7f1000 map4k=512'
 expected_paging_install='tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514'
 expected_heap_bootstrap='tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4'
+expected_heap_alloc_cycle='tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000'
 expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
 expected_interrupt_init_line='tosm-os: idt skeleton initialized\r\n'
@@ -19,6 +20,7 @@ expected_memory_init_line='tosm-os: memory init usable=0x3f790000 reserved=0x008
 expected_paging_plan_line='tosm-os: paging plan frames=4 window=0x3f7ed000-0x3f7f1000 map4k=512\r\n'
 expected_paging_install_line='tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514\r\n'
 expected_heap_bootstrap_line='tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4\r\n'
+expected_heap_alloc_cycle_line='tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000\r\n'
 expected_exception_page_fault_line='tosm-os: exception vector 14 page fault\r\n'
 
 contract_check() {
@@ -54,6 +56,11 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_heap_bootstrap}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected heap-bootstrap line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_heap_alloc_cycle}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected heap-alloc-cycle line not found"
     exit 1
   fi
 
@@ -109,6 +116,11 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_heap_bootstrap_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected heap-bootstrap CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_heap_alloc_cycle_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected heap-alloc-cycle CRLF contract not found"
     exit 1
   fi
 
@@ -305,6 +317,11 @@ run_qemu_smoke() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_heap_alloc_cycle}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing heap-alloc-cycle line"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing completion line"
     exit 1
@@ -319,7 +336,7 @@ run_qemu_smoke() {
     return 2
   fi
 
-  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, and completion lines"
+  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, and completion lines"
 }
 
 contract_check
