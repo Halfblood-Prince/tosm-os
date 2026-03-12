@@ -43,11 +43,18 @@ contract_check() {
 }
 
 screen_transcript_contract_check() {
-  cargo test --package uefi-entry --lib \
+  local transcript_tests=(
     model_boot_transcript_renders_banner_then_done_on_distinct_rows
-  cargo test --package uefi-entry --lib \
     model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines
-  echo "smoke: VGA transcript ordering contracts present"
+    model_scroll_moves_rows_up_and_clears_last_row
+  )
+
+  local test_name
+  for test_name in "${transcript_tests[@]}"; do
+    cargo test --package uefi-entry --lib "${test_name}"
+  done
+
+  echo "smoke: VGA transcript ordering and scrolling contracts present"
 }
 
 find_ovmf_code() {
