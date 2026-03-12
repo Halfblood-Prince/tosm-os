@@ -1,4 +1,14 @@
-[1m[33mwarning[0m: `kernel` (lib) generated 2 warnings (run `cargo fix --lib -p kernel` to apply 2 suggestions)
+smoke: serial message contracts present
+[1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
+[1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+[1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
+
+running 1 test
+test tests::model_boot_transcript_renders_banner_then_interrupt_then_done_on_distinct_rows ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.00s
+
 [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
@@ -7,30 +17,6 @@ test tests::model_panic_transcript_reinitializes_screen_and_removes_old_boot_lin
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.00s
 
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:154:44
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m|[0m         let handler = early_exception_stub as usize;
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-    [1m[94m= [0m[1mnote[0m: `#[warn(function_casts_as_integer)]` on by default
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m| [0m        let handler = early_exception_stub[92m as *const ()[0m as usize;
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:193:44
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m|[0m         handler_addr: early_exception_stub as usize,
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m| [0m        handler_addr: early_exception_stub[92m as *const ()[0m as usize,
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m: `kernel` (lib) generated 2 warnings (run `cargo fix --lib -p kernel` to apply 2 suggestions)
 [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
@@ -39,30 +25,6 @@ test tests::model_init_clears_screen_and_resets_cursor ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.00s
 
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:154:44
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m|[0m         let handler = early_exception_stub as usize;
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-    [1m[94m= [0m[1mnote[0m: `#[warn(function_casts_as_integer)]` on by default
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m| [0m        let handler = early_exception_stub[92m as *const ()[0m as usize;
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:193:44
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m|[0m         handler_addr: early_exception_stub as usize,
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m| [0m        handler_addr: early_exception_stub[92m as *const ()[0m as usize,
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m: `kernel` (lib) generated 2 warnings (run `cargo fix --lib -p kernel` to apply 2 suggestions)
 [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
@@ -71,30 +33,6 @@ test tests::model_newline_clears_destination_row ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.00s
 
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:154:44
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m|[0m         let handler = early_exception_stub as usize;
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-    [1m[94m= [0m[1mnote[0m: `#[warn(function_casts_as_integer)]` on by default
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m| [0m        let handler = early_exception_stub[92m as *const ()[0m as usize;
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:193:44
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m|[0m         handler_addr: early_exception_stub as usize,
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m| [0m        handler_addr: early_exception_stub[92m as *const ()[0m as usize,
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m: `kernel` (lib) generated 2 warnings (run `cargo fix --lib -p kernel` to apply 2 suggestions)
 [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
@@ -103,30 +41,6 @@ test tests::model_carriage_return_resets_column_and_overwrites_in_place ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.00s
 
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:154:44
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m|[0m         let handler = early_exception_stub as usize;
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-    [1m[94m= [0m[1mnote[0m: `#[warn(function_casts_as_integer)]` on by default
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m| [0m        let handler = early_exception_stub[92m as *const ()[0m as usize;
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:193:44
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m|[0m         handler_addr: early_exception_stub as usize,
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m| [0m        handler_addr: early_exception_stub[92m as *const ()[0m as usize,
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m: `kernel` (lib) generated 2 warnings (run `cargo fix --lib -p kernel` to apply 2 suggestions)
 [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
@@ -135,30 +49,6 @@ test tests::model_width_boundary_wrap_advances_to_next_row_and_clears_it ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.00s
 
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:154:44
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m|[0m         let handler = early_exception_stub as usize;
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-    [1m[94m= [0m[1mnote[0m: `#[warn(function_casts_as_integer)]` on by default
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m| [0m        let handler = early_exception_stub[92m as *const ()[0m as usize;
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:193:44
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m|[0m         handler_addr: early_exception_stub as usize,
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m| [0m        handler_addr: early_exception_stub[92m as *const ()[0m as usize,
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m: `kernel` (lib) generated 2 warnings (run `cargo fix --lib -p kernel` to apply 2 suggestions)
 [1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.01s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
@@ -169,31 +59,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; fin
 
 smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/scrolling contracts present
 [1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:154:44
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m|[0m         let handler = early_exception_stub as usize;
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-    [1m[94m= [0m[1mnote[0m: `#[warn(function_casts_as_integer)]` on by default
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m154[0m [1m[94m| [0m        let handler = early_exception_stub[92m as *const ()[0m as usize;
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
-[1m[33mwarning[0m[1m: direct cast of function item into an integer[0m
-   [1m[94m--> [0mkernel/src/lib.rs:193:44
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m|[0m         handler_addr: early_exception_stub as usize,
-    [1m[94m|[0m                                            [1m[33m^^^^^^^^[0m
-    [1m[94m|[0m
-[1m[96mhelp[0m: first cast to a pointer `as *const ()`
-    [1m[94m|[0m
-[1m[94m193[0m [1m[94m| [0m        handler_addr: early_exception_stub[92m as *const ()[0m as usize,
-    [1m[94m|[0m                                            [92m++++++++++++[0m
-
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[33mwarning[0m: `kernel` (lib) generated 2 warnings (run `cargo fix --lib -p kernel` to apply 2 suggestions)
-[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
-qemu-system-x86_64: terminating on signal 15 from pid 4179 (timeout)
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+qemu-system-x86_64: terminating on signal 15 from pid 4168 (timeout)
 smoke: QEMU boot output includes banner, interrupt-init, and completion lines
