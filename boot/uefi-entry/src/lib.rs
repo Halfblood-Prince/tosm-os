@@ -5,6 +5,17 @@ use core::ffi::c_void;
 
 const COM1_PORT: u16 = 0x3F8;
 const LINE_STATUS_TRANSMITTER_EMPTY: u8 = 1 << 5;
+const INTERRUPT_ENABLE_OFFSET: u16 = 1;
+const FIFO_CONTROL_OFFSET: u16 = 2;
+const LINE_CONTROL_OFFSET: u16 = 3;
+const MODEM_CONTROL_OFFSET: u16 = 4;
+const LINE_STATUS_OFFSET: u16 = 5;
+
+const LINE_CONTROL_DLAB: u8 = 1 << 7;
+const LINE_CONTROL_8N1: u8 = 0b0000_0011;
+const FIFO_ENABLE_CLEAR_14B: u8 = 0b1100_0111;
+const MODEM_CONTROL_DTR_RTS_OUT2: u8 = 0b0000_1011;
+const BAUD_DIVISOR_38400: u8 = 3;
 
 /// UEFI status code.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,6 +45,22 @@ impl SerialCom1 {
         Self
     }
 
+    fn init(&mut self) {
+        // Disable UART interrupts during initialization.
+        port_write_u8(COM1_PORT + INTERRUPT_ENABLE_OFFSET, 0x00);
+        // Enable DLAB so divisor latch bytes can be configured.
+        port_write_u8(COM1_PORT + LINE_CONTROL_OFFSET, LINE_CONTROL_DLAB);
+        // Configure 38400 baud divisor (low byte then high byte).
+        port_write_u8(COM1_PORT, BAUD_DIVISOR_38400);
+        port_write_u8(COM1_PORT + INTERRUPT_ENABLE_OFFSET, 0x00);
+        // Clear DLAB and select 8 data bits, no parity, one stop bit.
+        port_write_u8(COM1_PORT + LINE_CONTROL_OFFSET, LINE_CONTROL_8N1);
+        // Enable FIFO and clear both queues with a conservative trigger level.
+        port_write_u8(COM1_PORT + FIFO_CONTROL_OFFSET, FIFO_ENABLE_CLEAR_14B);
+        // Assert DTR/RTS/OUT2 for basic transmitter readiness.
+        port_write_u8(COM1_PORT + MODEM_CONTROL_OFFSET, MODEM_CONTROL_DTR_RTS_OUT2);
+    }
+
     fn write_byte(&mut self, byte: u8) {
         while !self.transmitter_empty() {}
         port_write_u8(COM1_PORT, byte);
@@ -46,7 +73,7 @@ impl SerialCom1 {
     }
 
     fn transmitter_empty(&self) -> bool {
-        let status = port_read_u8(COM1_PORT + 5);
+        let status = port_read_u8(COM1_PORT + LINE_STATUS_OFFSET);
         (status & LINE_STATUS_TRANSMITTER_EMPTY) != 0
     }
 }
@@ -101,6 +128,7 @@ pub const fn kernel_entry_message_line() -> &'static [u8] {
 #[no_mangle]
 pub extern "efiapi" fn efi_main(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus {
     let mut serial = SerialCom1::new();
+    serial.init();
     serial.write_all(kernel_entry_message_line());
     EfiStatus::SUCCESS
 }
@@ -112,6 +140,7 @@ use core::panic::PanicInfo;
 #[panic_handler]
 fn panic(_info: &PanicInfo<'_>) -> ! {
     let mut serial = SerialCom1::new();
+    serial.init();
     serial.write_all(b"tosm-os: panic in uefi-entry\r\n");
     loop {}
 }
@@ -121,7 +150,10 @@ extern crate std;
 
 #[cfg(test)]
 mod tests {
-    use super::{kernel_entry_message_line, EfiStatus, LINE_STATUS_TRANSMITTER_EMPTY};
+    use super::{
+        kernel_entry_message_line, EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1,
+        LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY,
+    };
 
     #[test]
     fn entry_message_line_matches_kernel_banner_with_crlf() {
@@ -139,5 +171,12 @@ mod tests {
     #[test]
     fn line_status_transmitter_empty_bit_matches_uart_lsr_spec() {
         assert_eq!(LINE_STATUS_TRANSMITTER_EMPTY, 1 << 5);
+    }
+
+    #[test]
+    fn uart_init_values_match_8n1_38400_profile() {
+        assert_eq!(LINE_CONTROL_DLAB, 1 << 7);
+        assert_eq!(LINE_CONTROL_8N1, 0b0000_0011);
+        assert_eq!(BAUD_DIVISOR_38400, 3);
     }
 }
