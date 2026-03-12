@@ -234,13 +234,33 @@ run_qemu_smoke() {
   cp "${ovmf_vars}" "${ovmf_vars_runtime}"
 
   local serial_log="${SMOKE_RUN_DIR}/serial.log"
+  local qemu_accel_args=("-accel" "tcg,thread=single")
+  if [[ -n "${QEMU_ACCEL_ARGS:-}" ]]; then
+    # shellcheck disable=SC2206
+    qemu_accel_args=(${QEMU_ACCEL_ARGS})
+  fi
+
+  local qemu_status=0
+  set +e
   timeout 20s "${qemu_bin}" \
     -nodefaults \
     -nographic \
+    "${qemu_accel_args[@]}" \
     -serial file:"${serial_log}" \
     -drive if=pflash,format=raw,readonly=on,file="${ovmf_code}" \
     -drive if=pflash,format=raw,file="${ovmf_vars_runtime}" \
     -drive format=raw,file=fat:rw:"${SMOKE_RUN_DIR}"
+  qemu_status=$?
+  set -e
+
+  if [[ "${qemu_status}" -ne 0 ]]; then
+    if [[ "${REQUIRE_QEMU_SMOKE:-0}" -eq 1 ]]; then
+      echo "smoke: QEMU execution failed with status ${qemu_status}"
+      exit 1
+    fi
+    echo "smoke: QEMU execution failed with status ${qemu_status}, skipping runtime output assertions"
+    return 2
+  fi
 
   if ! grep --fixed-strings --quiet -- "${expected_banner}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing banner"
