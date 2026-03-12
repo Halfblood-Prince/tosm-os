@@ -5,10 +5,10 @@
 [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name uefi_entry --edition=2021 boot/uefi-entry/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=e6a49e033c94928f -C extra-filename=-672de0481a9d44c1 --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rmeta`
 [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name uefi_entry --edition=2021 boot/uefi-entry/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=bd8e6a3497160a4a -C extra-filename=-df6ca0fed293499f --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib`
 [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name bootx64 --edition=2021 boot/uefi-entry/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=f8ed4a52099efd2f -C extra-filename=-60f3d71e13d89e2f --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib`
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.37s
 [1m[92m     Running[0m `/home/runner/work/tosm-os/tosm-os/target/debug/deps/kernel-5ba93148c5fbe0c7`
 
-running 22 tests
+running 27 tests
 test tests::boot_banner_bytes_are_stable ... ok
 test tests::boot_banner_line_bytes_include_crlf ... ok
 test tests::boot_banner_matches_expected_literal ... ok
@@ -18,21 +18,26 @@ test tests::boot_memory_init_line_bytes_include_crlf ... ok
 test tests::boot_paging_install_line_bytes_include_crlf ... ok
 test tests::boot_paging_plan_line_bytes_include_crlf ... ok
 test tests::boot_panic_line_bytes_include_crlf ... ok
-test tests::early_physical_memory_map_model_has_expected_regions ... ok
+test tests::canonical_virtual_address_guard_accepts_lower_and_higher_halves ... ok
 test tests::dispatch_exception_reports_known_and_unknown_vectors ... ok
+test tests::early_physical_memory_map_model_has_expected_regions ... ok
+test tests::early_translation_state_guard_rejects_invalid_reports ... ok
+test tests::early_virtual_translation_maps_identity_range_and_rejects_out_of_range ... ok
 test tests::exception_log_line_bytes_include_crlf ... ok
+test tests::early_virtual_translation_rejects_noncanonical_and_invalid_state ... ok
 test tests::exception_log_line_exposes_named_vectors_and_unknown_fallback ... ok
-test tests::idt_descriptor_limit_matches_table_size ... ok
 test tests::idt_entries_cover_all_exception_vectors ... ok
+test tests::idt_descriptor_limit_matches_table_size ... ok
 test tests::idt_entries_use_kernel_code_segment_interrupt_gates ... ok
 test tests::idt_entries_use_vector_specific_early_stubs ... ok
-test tests::idt_entry_missing_is_zeroed ... ok
 test tests::init_early_interrupts_reports_initialized_vectors ... ok
-test tests::init_early_paging_plan_selects_top_usable_frame_window_and_identity_map_contract ... ok
+test tests::idt_entry_missing_is_zeroed ... ok
 test tests::init_early_physical_memory_reports_usable_and_reserved_totals ... ok
+test tests::init_early_paging_plan_selects_top_usable_frame_window_and_identity_map_contract ... ok
+test tests::page_alignment_guard_detects_4k_boundaries ... ok
 test tests::install_early_paging_materializes_root_pdpt_and_identity_2m_entries ... ok
 
-test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 [1m[92m     Running[0m `/home/runner/work/tosm-os/tosm-os/target/debug/deps/uefi_entry-df6ca0fed293499f`
 
@@ -41,20 +46,20 @@ test tests::efi_status_success_value_is_zero ... ok
 test tests::entry_done_message_line_matches_kernel_canonical_completion_line ... ok
 test tests::entry_message_line_matches_kernel_banner_with_crlf ... ok
 test tests::interrupt_init_message_line_matches_kernel_canonical_interrupt_line ... ok
-test tests::line_status_transmitter_empty_bit_matches_uart_lsr_spec ... ok
 test tests::line_messages_fit_without_row_wrap ... ok
+test tests::line_status_transmitter_empty_bit_matches_uart_lsr_spec ... ok
 test tests::memory_init_message_line_matches_kernel_canonical_memory_line ... ok
-test tests::model_carriage_return_resets_column_and_overwrites_in_place ... ok
 test tests::model_boot_transcript_renders_banner_then_interrupt_then_done_on_distinct_rows ... ok
-test tests::model_init_clears_screen_and_resets_cursor ... ok
+test tests::model_carriage_return_resets_column_and_overwrites_in_place ... ok
 test tests::model_newline_clears_destination_row ... ok
 test tests::model_panic_line_renders_on_first_row_after_init ... ok
-test tests::model_scroll_moves_rows_up_and_clears_last_row ... ok
+test tests::model_init_clears_screen_and_resets_cursor ... ok
 test tests::model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines ... ok
+test tests::model_scroll_moves_rows_up_and_clears_last_row ... ok
 test tests::model_width_boundary_wrap_advances_to_next_row_and_clears_it ... ok
 test tests::paging_install_message_line_matches_kernel_canonical_paging_install_line ... ok
-test tests::paging_plan_message_line_matches_kernel_canonical_paging_plan_line ... ok
 test tests::panic_message_line_matches_kernel_canonical_panic_line ... ok
+test tests::paging_plan_message_line_matches_kernel_canonical_paging_plan_line ... ok
 test tests::uart_init_values_match_8n1_38400_profile ... ok
 test tests::vga_cell_index_uses_row_major_layout ... ok
 
