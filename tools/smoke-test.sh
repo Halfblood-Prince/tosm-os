@@ -253,15 +253,6 @@ run_qemu_smoke() {
   qemu_status=$?
   set -e
 
-  if [[ "${qemu_status}" -ne 0 ]]; then
-    if [[ "${REQUIRE_QEMU_SMOKE:-0}" -eq 1 ]]; then
-      echo "smoke: QEMU execution failed with status ${qemu_status}"
-      exit 1
-    fi
-    echo "smoke: QEMU execution failed with status ${qemu_status}, skipping runtime output assertions"
-    return 2
-  fi
-
   if ! grep --fixed-strings --quiet -- "${expected_banner}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing banner"
     exit 1
@@ -295,6 +286,15 @@ run_qemu_smoke() {
   if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing completion line"
     exit 1
+  fi
+
+  if [[ "${qemu_status}" -ne 0 ]]; then
+    if [[ "${REQUIRE_QEMU_SMOKE:-0}" -eq 1 ]]; then
+      echo "smoke: QEMU exited with status ${qemu_status} after producing complete serial transcript"
+      return 0
+    fi
+    echo "smoke: QEMU exited with status ${qemu_status} after producing complete serial transcript"
+    return 2
   fi
 
   echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, and completion lines"
