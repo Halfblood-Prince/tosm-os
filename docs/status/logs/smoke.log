@@ -1,10 +1,15 @@
 smoke: serial message contracts present
 [1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
-[1m[91merror[E0463][0m[1m: can't find crate for `core`[0m
+[1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
+[1m[91merror[0m[1m: linking with `rust-lld` failed: exit status: 1[0m
   [1m[94m|[0m
-  [1m[94m= [0m[1mnote[0m: the `x86_64-unknown-uefi` target may not be installed
-  [1m[94m= [0m[1mhelp[0m: consider downloading the target with `rustup target add x86_64-unknown-uefi`
+  [1m[94m= [0m[1mnote[0m:  "rust-lld" "-flavor" "link" "/NOLOGO" "/entry:efi_main" "/subsystem:efi_application" "/home/runner/work/tosm-os/tosm-os/target/x86_64-unknown-uefi/debug/deps/rustc0epOYD/symbols.o" "<1 object files omitted>" "/home/runner/work/tosm-os/tosm-os/target/x86_64-unknown-uefi/debug/deps/{libuefi_entry-11328de3e6087ec0,libkernel-5a48926a4a51df00}.rlib" "<sysroot>/lib/rustlib/x86_64-unknown-uefi/lib/{libcore-*,libcompiler_builtins-*}.rlib" "/NXCOMPAT" "/OUT:/home/runner/work/tosm-os/tosm-os/target/x86_64-unknown-uefi/debug/deps/bootx64-7dc8bbe995de4752.efi" "/OPT:REF,NOICF" "/DEBUG" "/PDBALTPATH:%_PDB%" "/NODEFAULTLIB"
+  [1m[94m= [0m[1mnote[0m: some arguments are omitted. use `--verbose` to show all linker arguments
+  [1m[94m= [0m[1mnote[0m: rust-lld: error: duplicate symbol: efi_main
+          >>> defined at /home/runner/work/tosm-os/tosm-os/boot/uefi-entry/src/main.rs:11
+          >>>            /home/runner/work/tosm-os/tosm-os/target/x86_64-unknown-uefi/debug/deps/bootx64-7dc8bbe995de4752.bootx64.7edd99dd62742c0a-cgu.0.rcgu.o
+          >>> defined at libuefi_entry-11328de3e6087ec0.rlib(uefi_entry-11328de3e6087ec0.uefi_entry.ba09d913857bbcc6-cgu.0.rcgu.o)
+          
 
-[1mFor more information about this error, try `rustc --explain E0463`.[0m
-[1m[91merror[0m: could not compile `kernel` (lib) due to 1 previous error
+[1m[91merror[0m: could not compile `uefi-entry` (bin "bootx64") due to 1 previous error
 smoke: expected EFI image missing at target/x86_64-unknown-uefi/debug/bootx64.efi
