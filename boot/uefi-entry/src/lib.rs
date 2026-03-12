@@ -271,8 +271,11 @@ use core::panic::PanicInfo;
 #[panic_handler]
 fn panic(_info: &PanicInfo<'_>) -> ! {
     let mut serial = SerialCom1::new();
+    let mut screen = VgaTextWriter::new();
     serial.init();
+    screen.init_for_boot_logs();
     serial.write_all(panic_message_line());
+    screen.write_all(panic_message_line());
     loop {}
 }
 
@@ -411,9 +414,31 @@ mod tests {
     #[test]
     fn line_messages_fit_without_row_wrap() {
         let banner_columns = kernel_entry_message_line().len();
+        let panic_columns = panic_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
+        assert!(panic_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
+    }
+
+    #[test]
+    fn model_panic_line_renders_on_first_row_after_init() {
+        let mut model = VgaWriterModel::new();
+        model.write_all(b"dirty line\n");
+
+        model.init_for_boot_logs();
+        model.write_all(panic_message_line());
+
+        let mut expected = [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS];
+        expected[..("tosm-os: panic in uefi-entry".len())]
+            .copy_from_slice(b"tosm-os: panic in uefi-entry");
+        assert_eq!(model.row, 1);
+        assert_eq!(model.column, 0);
+        assert_eq!(model.row_bytes(0), expected);
+        assert_eq!(
+            model.row_bytes(1),
+            [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
+        );
     }
 
     #[test]
