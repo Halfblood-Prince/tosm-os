@@ -48,6 +48,8 @@ screen_transcript_contract_check() {
     model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines
     model_init_clears_screen_and_resets_cursor
     model_newline_clears_destination_row
+    model_carriage_return_resets_column_and_overwrites_in_place
+    model_width_boundary_wrap_advances_to_next_row_and_clears_it
     model_scroll_moves_rows_up_and_clears_last_row
   )
 
@@ -56,7 +58,7 @@ screen_transcript_contract_check() {
     cargo test --package uefi-entry --lib "${test_name}"
   done
 
-  echo "smoke: VGA transcript init/newline/ordering/scrolling contracts present"
+  echo "smoke: VGA transcript init/newline/carriage-return/wrap/ordering/scrolling contracts present"
 }
 
 find_ovmf_code() {
