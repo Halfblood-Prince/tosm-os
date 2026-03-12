@@ -4,7 +4,7 @@
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
 [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name uefi_entry --edition=2021 boot/uefi-entry/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=e6a49e033c94928f -C extra-filename=-672de0481a9d44c1 --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rmeta`
 [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name uefi_entry --edition=2021 boot/uefi-entry/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=bd8e6a3497160a4a -C extra-filename=-df6ca0fed293499f --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib`
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.22s
 [1m[92m     Running[0m `/home/runner/work/tosm-os/tosm-os/target/debug/deps/kernel-5ba93148c5fbe0c7`
 
 running 5 tests
@@ -19,10 +19,10 @@ test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 [1m[92m     Running[0m `/home/runner/work/tosm-os/tosm-os/target/debug/deps/uefi_entry-df6ca0fed293499f`
 
 running 6 tests
-test tests::efi_status_success_value_is_zero ... ok
 test tests::entry_done_message_line_matches_kernel_canonical_completion_line ... ok
-test tests::line_status_transmitter_empty_bit_matches_uart_lsr_spec ... ok
+test tests::efi_status_success_value_is_zero ... ok
 test tests::entry_message_line_matches_kernel_banner_with_crlf ... ok
+test tests::line_status_transmitter_empty_bit_matches_uart_lsr_spec ... ok
 test tests::panic_message_line_matches_kernel_canonical_panic_line ... ok
 test tests::uart_init_values_match_8n1_38400_profile ... ok
 
