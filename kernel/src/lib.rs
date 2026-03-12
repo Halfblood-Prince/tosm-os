@@ -152,6 +152,15 @@ pub enum VirtualAddressTranslationError {
     InvalidPagingState,
 }
 
+/// Errors returned by early frame-allocation helpers used by allocator bring-up.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyFrameAllocationError {
+    InvalidPagingState,
+    NonCanonicalAddress,
+    UnmappedAddress,
+    OutOfFrames,
+}
+
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
 pub const EARLY_PAGING_FRAME_WINDOW_FRAMES: usize = 4;
 pub const EARLY_IDENTITY_MAP_PAGES_4K: usize = 512;
@@ -210,6 +219,77 @@ pub fn translate_early_virtual_to_physical(
     }
 
     Ok(PhysicalAddress(virt.0))
+}
+
+/// Deterministic 4KiB frame record returned by early allocator-facing selection APIs.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyFrameAllocation {
+    pub frame_start: PhysicalAddress,
+    pub requested_virt: VirtualAddress,
+    pub translated_phys: PhysicalAddress,
+}
+
+/// Deterministic early frame allocator over the identity-mapped range.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyFrameAllocator {
+    next_frame_start: u64,
+    end_exclusive: u64,
+}
+
+impl EarlyFrameAllocator {
+    /// Creates an allocator that hands out 4KiB frames from the deterministic identity-map span.
+    #[must_use]
+    pub fn from_install_report(report: EarlyPagingInstallReport) -> Self {
+        Self {
+            next_frame_start: 0,
+            end_exclusive: report.mapped_span_bytes,
+        }
+    }
+
+    /// Returns the next frame start this allocator will hand out.
+    #[must_use]
+    pub const fn next_frame_start(&self) -> u64 {
+        self.next_frame_start
+    }
+
+    /// Returns the exclusive end boundary for frame selection.
+    #[must_use]
+    pub const fn end_exclusive(&self) -> u64 {
+        self.end_exclusive
+    }
+
+    /// Selects one frame and validates the caller-provided virtual address translation contract.
+    pub fn allocate_for_virtual(
+        &mut self,
+        requested_virt: VirtualAddress,
+        report: EarlyPagingInstallReport,
+    ) -> Result<EarlyFrameAllocation, EarlyFrameAllocationError> {
+        let translated_phys = match translate_early_virtual_to_physical(requested_virt, report) {
+            Ok(phys) => phys,
+            Err(VirtualAddressTranslationError::InvalidPagingState) => {
+                return Err(EarlyFrameAllocationError::InvalidPagingState);
+            }
+            Err(VirtualAddressTranslationError::NonCanonicalAddress) => {
+                return Err(EarlyFrameAllocationError::NonCanonicalAddress);
+            }
+            Err(VirtualAddressTranslationError::UnmappedAddress) => {
+                return Err(EarlyFrameAllocationError::UnmappedAddress);
+            }
+        };
+
+        if self.next_frame_start >= self.end_exclusive {
+            return Err(EarlyFrameAllocationError::OutOfFrames);
+        }
+
+        let frame_start = self.next_frame_start;
+        self.next_frame_start += PAGE_SIZE_4K_BYTES;
+
+        Ok(EarlyFrameAllocation {
+            frame_start: PhysicalAddress(frame_start),
+            requested_virt,
+            translated_phys,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -734,16 +814,12 @@ fn maybe_load_early_idt(_descriptor: &IdtDescriptor) {}
 
 #[cfg(all(target_arch = "x86_64", target_os = "uefi"))]
 fn maybe_install_cr3(root_table_phys_addr: u64) -> bool {
-    // SAFETY: early firmware boot intentionally installs a deterministic top-level page table
-    // root into CR3 before enabling higher-level kernel subsystems.
-    unsafe {
-        core::arch::asm!(
-            "mov cr3, rax",
-            in("rax") root_table_phys_addr,
-            options(nostack, preserves_flags)
-        );
-    }
-    true
+    let _ = root_table_phys_addr;
+    // Early paging structures are still materialized for deterministic contract tests, but we
+    // intentionally avoid writing CR3 in the UEFI path for now. The frame-window addresses are
+    // modeled physical addresses, not yet backed by allocator-owned identity mappings, so loading
+    // them into CR3 can fault/abort before the boot transcript reaches completion in QEMU smoke.
+    false
 }
 
 #[cfg(not(all(target_arch = "x86_64", target_os = "uefi")))]
@@ -764,10 +840,11 @@ mod tests {
         early_physical_memory_map, early_translation_state_valid, exception_log_line,
         exception_log_line_bytes, init_early_interrupts, init_early_paging_plan,
         init_early_physical_memory, install_early_paging, is_canonical_virtual_address,
-        is_page_aligned_4k, translate_early_virtual_to_physical, IdtEntry,
-        PhysicalMemoryRegionKind, VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER,
-        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE,
-        BOOT_PAGING_INSTALL_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
+        is_page_aligned_4k, translate_early_virtual_to_physical, EarlyFrameAllocationError,
+        EarlyFrameAllocator, IdtEntry, PhysicalMemoryRegionKind, VirtualAddress,
+        VirtualAddressTranslationError, BOOT_BANNER, BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE,
+        BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
+        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -985,6 +1062,68 @@ mod tests {
         let err = translate_early_virtual_to_physical(VirtualAddress(0), bad)
             .expect_err("invalid paging state should be rejected");
         assert_eq!(err, VirtualAddressTranslationError::InvalidPagingState);
+    }
+
+    #[test]
+    fn early_frame_allocator_hands_out_4k_frames_and_tracks_progress() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+
+        let mut allocator = EarlyFrameAllocator::from_install_report(install);
+        let first = allocator
+            .allocate_for_virtual(VirtualAddress(0x2000), install)
+            .expect("first allocation should succeed");
+        let second = allocator
+            .allocate_for_virtual(VirtualAddress(0x3000), install)
+            .expect("second allocation should succeed");
+
+        assert_eq!(first.frame_start.0, 0);
+        assert_eq!(second.frame_start.0, 0x1000);
+        assert_eq!(first.translated_phys.0, 0x2000);
+        assert_eq!(allocator.next_frame_start(), 0x2000);
+        assert_eq!(allocator.end_exclusive(), install.mapped_span_bytes);
+    }
+
+    #[test]
+    fn early_frame_allocator_rejects_invalid_virtual_translation_inputs() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+        let mut allocator = EarlyFrameAllocator::from_install_report(install);
+
+        let err = allocator
+            .allocate_for_virtual(VirtualAddress(0x0000_8000_0000_0000), install)
+            .expect_err("non-canonical addresses must be rejected");
+        assert_eq!(err, EarlyFrameAllocationError::NonCanonicalAddress);
+
+        let err = allocator
+            .allocate_for_virtual(VirtualAddress(0x0000_0001_0000_0000), install)
+            .expect_err("unmapped addresses must be rejected");
+        assert_eq!(err, EarlyFrameAllocationError::UnmappedAddress);
+
+        let mut bad = install;
+        bad.root_table_phys_addr = 0x1234;
+        let err = allocator
+            .allocate_for_virtual(VirtualAddress(0), bad)
+            .expect_err("invalid paging state should be rejected");
+        assert_eq!(err, EarlyFrameAllocationError::InvalidPagingState);
+    }
+
+    #[test]
+    fn early_frame_allocator_reports_out_of_frames_at_end_of_span() {
+        let mut allocator = EarlyFrameAllocator {
+            next_frame_start: 0x1000,
+            end_exclusive: 0x1000,
+        };
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+
+        let err = allocator
+            .allocate_for_virtual(VirtualAddress(0), install)
+            .expect_err("allocator should reject allocations beyond frame span");
+        assert_eq!(err, EarlyFrameAllocationError::OutOfFrames);
     }
 
     #[test]

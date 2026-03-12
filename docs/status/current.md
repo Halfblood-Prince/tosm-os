@@ -29,7 +29,9 @@
 - Completed slice: raised QEMU smoke timeout default from 20s to a configurable `QEMU_TIMEOUT_SECS` (default 45s), and emit an explicit timeout diagnostic before transcript assertions so slower CI boots can still produce the required paging-install line.
 - Completed slice: switched smoke QEMU default acceleration args from `-accel tcg,thread=single` to `-accel tcg` to avoid the observed iothread assertion crash path in CI runners while preserving `QEMU_ACCEL_ARGS` override behavior.
 - Completed slice: added kernel-level virtual-memory helpers (`VirtualAddress`/`PhysicalAddress`) with canonical-address validation, 4KiB alignment/state guards, and deterministic early identity-map translation contracts to unblock allocator bring-up.
-- Next slice: integrate the translation helper surface into an initial kernel allocator frame-selection API.
+- Completed slice: fixed the boot-smoke runtime failure trigger by deferring early CR3 installation in the UEFI path until allocator-backed physical ownership is available, preventing pre-transcript faults during QEMU boot smoke.
+- Completed slice: integrated an initial allocator-facing early frame-selection API (`EarlyFrameAllocator`) that consumes paging install reports, validates translation preconditions, and returns deterministic 4KiB frame allocations with explicit error contracts.
+- Next slice: thread the early frame allocator through a first kernel heap bootstrap path.
 
 <!-- ci-status:start -->
 ## Latest CI automation
