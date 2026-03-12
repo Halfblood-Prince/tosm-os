@@ -1,7 +1,7 @@
 # Milestones
 
-1. [ ] bootloader and entry
-2. [ ] serial and screen output
+1. [x] bootloader and entry
+2. [ ] serial and screen output (active)
 3. [ ] interrupt setup
 4. [ ] physical memory management
 5. [ ] paging / virtual memory

@@ -45,6 +45,7 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 12. ✅ Extend the smoke contract check to require explicit canonical CRLF line literals for banner, panic, and completion messages.
 13. ✅ Add a UEFI `bootx64` application target and extend smoke automation to execute a QEMU boot check when QEMU + OVMF are available.
 14. ✅ Gate `bootx64` binary crate attributes and entry symbol to `target_os = "uefi"`, with a host-only `main` shim so workspace host checks stop compiling UEFI no_std panic handlers as std test binaries.
+15. ✅ Make QEMU smoke mandatory in CI by tightening smoke-test firmware discovery, adding additional common OVMF paths, and requiring QEMU execution under CI while preserving local best-effort smoke behavior.
 
 ## Risks
 

@@ -139,7 +139,7 @@ jobs:
           set -o pipefail
           {
             chmod +x ./tools/smoke-test.sh
-            ./tools/smoke-test.sh
+            REQUIRE_QEMU_SMOKE=1 ./tools/smoke-test.sh
           } 2>&1 | tee logs/smoke.log
 
       - name: Write smoke report

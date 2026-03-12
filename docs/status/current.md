@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: make the `bootx64` UEFI binary target host-check friendly so workspace CI jobs can compile/test/clippy without pulling UEFI panic semantics into host `std` test builds
-- Status: in_progress (implemented target-gated UEFI entry attributes and symbol export, with a host-only shim `main` for non-UEFI checks)
+- Subtask: make QEMU smoke mandatory in CI with deterministic OVMF handling while keeping local smoke checks portable
+- Status: completed (CI smoke step now requires QEMU execution and smoke tooling handles broader OVMF layouts plus per-run mutable vars copies)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: fixed the smallest concrete CI blocker by gating `boot/uefi-entry/src/main.rs` to UEFI-only `no_std`/`no_main` + `efi_main`, while providing a host-only `main()` shim so host-target `clippy`, `test`, and `build` no longer compile the UEFI panic runtime as a `std` test binary.
-- Next slice: rerun CI and, if green on host checks, continue the milestone plan to make QEMU smoke mandatory with deterministic OVMF provisioning in CI.
+- Completed slice: made CI smoke execution mandatory by running `tools/smoke-test.sh` with `REQUIRE_QEMU_SMOKE=1`, expanded OVMF discovery for common Linux layouts (including 4M images), and switched QEMU to use a temporary copy of OVMF vars for deterministic, isolated runs.
+- Next slice: start milestone 2 (`serial and screen output`) by adding a minimal screen-output path (framebuffer or UEFI console) that mirrors the canonical early boot messages currently emitted on serial.
 
 <!-- ci-status:start -->
 ## Latest CI automation

@@ -21,7 +21,7 @@ Workspace validation commands are wired through canonical `make` targets:
 - `make build`
 - `make smoke`
 
-QEMU runtime smoke execution is opportunistic: it runs when the host environment provides QEMU + OVMF and otherwise leaves a contract-only smoke pass.
+QEMU runtime smoke execution is mandatory in CI (`REQUIRE_QEMU_SMOKE=1`) and still opportunistic for local runs: local smoke checks fall back to contract-only validation when QEMU/OVMF are unavailable.
 
 ## Codex + CI workflow
 
