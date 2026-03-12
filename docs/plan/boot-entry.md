@@ -41,6 +41,8 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 
 9. ✅ Centralize the early-boot panic serial line in `kernel` and consume it from `boot/uefi-entry` panic handler.
 
+10. ✅ Add a canonical completion serial line in `kernel` and emit it from `boot/uefi-entry` before returning `EFI_SUCCESS`.
+
 ## Risks
 
 - Missing `x86_64-unknown-uefi` target can block UEFI build/lint/smoke steps later.

@@ -4,8 +4,8 @@ The repository is progressing through the first milestone (`bootloader and entry
 
 This slice introduces a minimal Rust workspace with:
 
-- a host-testable `kernel` crate that owns an explicit deterministic boot banner literal plus a canonical CRLF-terminated serial line helper
-- a `boot/uefi-entry` crate that defines a UEFI ABI `efi_main`, writes the kernel-provided banner line to COM1, and includes a minimal panic handler
+- a host-testable `kernel` crate that owns an explicit deterministic boot banner literal plus canonical CRLF-terminated serial line helpers for both entry and completion paths
+- a `boot/uefi-entry` crate that defines a UEFI ABI `efi_main`, writes kernel-provided banner and completion lines to COM1, and includes a minimal panic handler
 
 Canonical boot banner:
 
