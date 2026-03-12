@@ -19,17 +19,20 @@ test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 [1m[92m     Running[0m `/home/runner/work/tosm-os/tosm-os/target/debug/deps/uefi_entry-df6ca0fed293499f`
 
-running 8 tests
+running 11 tests
 test tests::efi_status_success_value_is_zero ... ok
-test tests::entry_message_line_matches_kernel_banner_with_crlf ... ok
-test tests::line_messages_fit_without_row_wrap ... ok
-test tests::entry_done_message_line_matches_kernel_canonical_completion_line ... ok
 test tests::line_status_transmitter_empty_bit_matches_uart_lsr_spec ... ok
-test tests::panic_message_line_matches_kernel_canonical_panic_line ... ok
+test tests::line_messages_fit_without_row_wrap ... ok
+test tests::entry_message_line_matches_kernel_banner_with_crlf ... ok
+test tests::entry_done_message_line_matches_kernel_canonical_completion_line ... ok
+test tests::model_init_clears_screen_and_resets_cursor ... ok
+test tests::model_newline_clears_destination_row ... ok
+test tests::model_scroll_moves_rows_up_and_clears_last_row ... ok
 test tests::uart_init_values_match_8n1_38400_profile ... ok
 test tests::vga_cell_index_uses_row_major_layout ... ok
+test tests::panic_message_line_matches_kernel_canonical_panic_line ... ok
 
-test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 [1m[92m     Running[0m `/home/runner/work/tosm-os/tosm-os/target/debug/deps/bootx64-60f3d71e13d89e2f`
 

@@ -1,6 +1,6 @@
 smoke: serial message contracts present
 [1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
-qemu-system-x86_64: terminating on signal 15 from pid 4073 (timeout)
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 10.14s
+qemu-system-x86_64: terminating on signal 15 from pid 3964 (timeout)
 smoke: QEMU boot output includes banner and completion line
