@@ -2,5 +2,5 @@
 
 - Format: success
 - Clippy: success
-- Tests: cancelled
-- Build: skipped
+- Tests: success
+- Build: success
