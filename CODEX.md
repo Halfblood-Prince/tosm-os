@@ -1,214 +1,137 @@
-# Codex Execution Prompt
+# CODEX.md
+Guidelines for Codex when contributing to this repository.
 
-Read AGENTS.md and the files under docs/status/ first.
+This repository contains a hobby operating system. Codex should prioritize **forward progress** and **meaningful milestones**, not micro-optimizations.
 
-You are working inside an automated CI-driven development workflow.
-Your job is to advance the repository toward the next milestone by implementing a complete milestone slice.
+---
 
-Follow this contract strictly.
+# Core Principle
 
-# Development Contract
-## Allowed actions
+Always **continue development from the current repository state** and push the OS toward the **next functional milestone**.
 
-- Write code and documentation only.
+Do not stall on tiny improvements.
 
-- You may modify any files in the repository.
+---
 
-- You may add new files when needed.
+# Development Behaviour
 
-- Prefer implementing complete functionality rather than partial scaffolding.
+Codex must:
 
-## Forbidden actions
+1. Read the current repository structure.
+2. Continue development logically from the current code.
+3. Implement meaningful features in **coherent chunks**, not tiny edits.
 
-- Do not run builds, tests, or commands locally.
+Avoid changes that add only a few lines unless absolutely necessary.
 
-- Do not claim tests passed unless docs/status/ explicitly says so.
+Target **substantial progress per run**.
 
-- Do not fabricate CI results.
+---
 
-- Do not claim verification that has not been recorded in the status docs.
+# Expected Patch Size
 
-## Source of Truth
+Codex should prefer:
 
-When determining project state, use these sources in priority order:
+- multi-file improvements
+- coherent feature additions
+- logical subsystem implementations
 
-- docs/status/ci-feedback.json
+Typical acceptable contribution size:
 
-- docs/status/latest-ci.md
 
-- docs/status/reports/
+50–300+ lines per run
 
-- docs/status/logs/
 
-- docs/status/current.md
+Do **not artificially limit changes** to small patches.
 
-If current.md conflicts with CI artifacts, trust CI artifacts.
+---
 
-## CI Handling Rules
-If latest CI failed, identify the smallest concrete failure from:
+# Milestone Driven Development
 
-- docs/status/logs/
+Development should follow **milestones typical for hobby OS projects**, such as:
 
-- docs/status/reports/
+- Bootloader
+- Basic kernel
+- Screen output
+- Memory setup
+- Interrupt handling
+- Keyboard input
+- Simple shell
+- Filesystem support
+- Process/task system
 
-Then fix only that failure with the smallest change that resolves it.
+---
 
-Do not implement new features until CI failures are resolved.
+# Milestone Completion Rule
 
-If latest CI succeeded
+When a milestone is **functional and usable**, Codex should:
 
-Advance the project by implementing one complete milestone slice.
+1. Mark the milestone as **complete**
+2. Move to the **next milestone**
 
-A milestone slice must:
+Do NOT repeatedly optimize the same milestone.
 
-create a real new capability
+Example:
 
-advance the milestone toward completion
+Bad behavior:
 
-leave the repository in a strictly more complete state
+keep rewriting VGA printing code repeatedly
 
-Examples of acceptable slices include:
 
-implementing a loader stage
+Correct behavior:
 
-wiring kernel entry
+VGA printing works → move to interrupts
 
-building an EFI application
 
-adding image creation
+---
 
-connecting boot stages
+# Optimization Policy
 
-adding minimal runtime support
+Optimization is **not the priority**.
 
-implementing a build step required for boot
+Only optimize when:
 
-Avoid cosmetic edits or documentation-only changes unless necessary.
+- a milestone is already complete
+- performance blocks further development
 
-Commit Scope Rules
+Otherwise prioritize **new functionality**.
 
-To prevent micro-changes:
+---
 
-Prefer coherent multi-file edits when required.
+# Implementation Strategy
 
-Do not intentionally minimize the diff.
+When implementing features:
 
-Avoid commits smaller than ~30 lines unless the change is truly trivial.
+1. Create minimal working implementation.
+2. Ensure it builds successfully.
+3. Ensure the system still boots.
+4. Continue building the next subsystem.
 
-Implement the entire slice end-to-end, not partial scaffolding.
+---
 
-The goal is steady milestone progress, not minimal diffs.
+# Repository Awareness
 
-Slice Selection
+Codex should examine:
 
-Determine the next slice by reading:
+- Makefiles
+- build scripts
+- existing kernel modules
+- bootloader configuration
+- architecture folders
 
-docs/plan/
+Then extend the system logically.
 
-docs/status/current.md
+---
 
-Choose the next unfinished milestone slice.
+# Goal
 
-Do not repeat slices that are already completed.
+Gradually evolve this project into a **fully working hobby OS** with:
 
-If the milestone appears complete, mark it complete and advance to the next milestone defined in docs/plan.
+- booting kernel
+- interrupt support
+- memory management
+- device input
+- basic shell
+- filesystem
+- multitasking
 
-Required Workflow
-
-Perform the following steps:
-
-1. Summarize project state
-
-Summarize the current state using:
-
-docs/status/current.md
-
-docs/status/ci-feedback.json
-
-docs/status/latest-ci.md
-
-docs/status/reports/
-
-docs/status/logs/
-
-docs/plan/
-
-Your summary must identify:
-
-current milestone
-
-CI status
-
-last completed slice
-
-next unfinished slice
-
-2. Select the next slice
-
-Identify exactly one next milestone slice.
-
-Explain briefly why it is the correct next step.
-
-3. Implement the slice
-
-Write the code necessary to implement the slice fully.
-
-You may:
-
-modify multiple files
-
-add modules
-
-add build steps
-
-update documentation
-
-Ensure the change moves the milestone forward.
-
-4. Update project status
-
-Update docs/status/current.md to reflect:
-
-current milestone
-
-completed slice
-
-status
-
-next slice
-
-brief explanation of progress
-
-If the milestone is complete, mark it complete and identify the next milestone.
-
-Quality Rules
-
-Prefer simple, deterministic implementations.
-
-Avoid unnecessary abstractions.
-
-Keep code readable and minimal.
-
-Ensure the repository remains internally consistent.
-
-Completion Condition
-
-Stop after:
-
-implementing one milestone slice
-
-updating status documentation
-
-Do not implement multiple slices in a single run.
-
-Final Output
-
-Your response should include:
-
-Project state summary
-
-Selected milestone slice
-
-Implemented changes
-
-Updated docs/status/current.md
+Progress matters more than perfection.
