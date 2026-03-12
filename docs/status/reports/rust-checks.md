@@ -1,6 +1,3 @@
-# Rust checks report
+# rust-checks.md
 
-- Format: success
-- Clippy: success
-- Tests: success
-- Build: success
+Report artifact was not found for the latest CI run.
