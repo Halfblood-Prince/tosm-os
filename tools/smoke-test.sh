@@ -4,6 +4,8 @@ set -euo pipefail
 expected_banner='tosm-os: kernel entry reached'
 expected_panic='tosm-os: panic in uefi-entry'
 expected_interrupt_init='tosm-os: idt skeleton initialized'
+expected_exception_page_fault='tosm-os: exception vector 14 page fault'
+expected_exception_unknown='tosm-os: exception vector unknown'
 expected_entry_done='tosm-os: efi_main completed'
 expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
@@ -18,6 +20,16 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_interrupt_init}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected interrupt-init line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_exception_page_fault}" kernel/src/lib.rs; then
+    echo "smoke: expected page-fault exception log line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_exception_unknown}" kernel/src/lib.rs; then
+    echo "smoke: expected unknown exception log line not found"
     exit 1
   fi
 

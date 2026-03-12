@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: interrupt setup
-- Subtask: wire a deterministic early IDT skeleton into firmware entry and lock transcript contracts around interrupt-init ordering.
+- Subtask: ship vector-specific early exception stubs plus deterministic exception-log message contracts for vectors 0-31.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -15,9 +15,9 @@
 
 ## Progress update
 
-- Completed slice: added a kernel-owned x86_64 IDT skeleton model for the first 32 exception vectors, a boot interrupt-init serial line contract, and UEFI boot-path wiring that initializes early interrupts between banner and completion output; smoke + host transcript tests now enforce this ordering.
-- Maintenance update: fixed the CI Clippy blocker by routing early exception handler address capture through an explicit function-pointer-to-raw-pointer conversion helper so `-D warnings` no longer fails on `function-casts-as-integer`.
-- Next slice: replace the shared spin-loop exception stub with vector-specific deterministic handlers and add first exception logging coverage.
+- Completed slice: replaced the single shared early exception handler pointer with 32 vector-specific early stubs and wired the early IDT population path so each exception vector gets its own deterministic handler address.
+- Completed slice: added kernel-owned deterministic exception log line contracts for vectors 0-31 plus an unknown-vector fallback, with host tests and smoke contract checks covering representative vectors and fallback behavior.
+- Next slice: wire real exception dispatch logging in firmware path (or a host model of it) so an observed exception vector can emit the matching deterministic serial line.
 
 <!-- ci-status:start -->
 ## Latest CI automation
