@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: resolve UEFI smoke link failure by ensuring only one exported `efi_main` symbol exists in `bootx64`
-- Status: completed (`boot/uefi-entry` now exposes a shared `run_entry` function from the library, while only the `bootx64` binary exports the firmware `efi_main` symbol, eliminating the duplicate-symbol link error seen in smoke)
+- Subtask: fix smoke script unbound-variable failure after QEMU execution in CI
+- Status: completed (`tools/smoke-test.sh` now uses a stable temp-directory variable for the EXIT cleanup trap so cleanup no longer references an out-of-scope `local run_dir` under `set -u`, removing the `run_dir: unbound variable` smoke failure)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: fixed the smallest concrete CI failure in smoke (`rust-lld: error: duplicate symbol: efi_main`) by removing the exported UEFI entry symbol from the library crate, introducing a shared `run_entry` function, and keeping the exported `efi_main` symbol exclusively in the `bootx64` binary target.
-- Next slice: wait for CI results for this linker fix; once CI is green, mark milestone 1 complete and begin milestone 2 (`serial and screen output`) with a minimal screen-output path mirroring canonical serial boot messages.
+- Completed slice: fixed the smallest concrete smoke failure (`./tools/smoke-test.sh: line 1: run_dir: unbound variable`) by replacing the function-local `run_dir` temp directory with a stable variable used by the EXIT trap and all QEMU runtime paths.
+- Next slice: wait for CI results for this smoke-script fix; once CI is green, mark milestone 1 complete and begin milestone 2 (`serial and screen output`) with a minimal screen-output path mirroring canonical serial boot messages.
 
 <!-- ci-status:start -->
 ## Latest CI automation
