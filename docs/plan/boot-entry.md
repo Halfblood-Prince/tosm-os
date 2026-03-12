@@ -39,6 +39,8 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 7. ✅ Centralize the CRLF-terminated banner line in `kernel` and consume it from `boot/uefi-entry`.
 8. ✅ Initialize COM1 UART line settings in `boot/uefi-entry` before transmitting banner bytes.
 
+9. ✅ Centralize the early-boot panic serial line in `kernel` and consume it from `boot/uefi-entry` panic handler.
+
 ## Risks
 
 - Missing `x86_64-unknown-uefi` target can block UEFI build/lint/smoke steps later.
