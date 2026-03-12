@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: serial and screen output
-- Subtask: mirror the canonical early-boot panic line to VGA text mode in addition to COM1 serial
-- Status: completed (updated the UEFI panic path to initialize VGA boot logging and write the canonical panic line on screen as well as serial)
+- Subtask: add host-testable VGA transcript ordering coverage for banner/completion and panic-path reinitialization invariants
+- Status: completed (added deterministic VGA transcript model tests that assert banner/completion ordering and panic-path screen reset behavior)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: extended `boot/uefi-entry` panic handling so panic diagnostics now mirror the canonical `tosm-os: panic in uefi-entry\r\n` line to VGA text output in addition to COM1, preserving deterministic early-boot diagnostics across serial and screen channels.
-- Next slice: add host-testable coverage for complete boot-screen transcript ordering (banner, completion, and panic-path invariants) to protect deterministic serial/screen parity as milestone 2 progresses.
+- Completed slice: added host-testable VGA transcript ordering tests in `boot/uefi-entry` that validate boot banner/completion row placement and panic-path reinitialization invariants for deterministic serial/screen parity evolution.
+- Next slice: enforce canonical boot-screen transcript contracts in smoke automation so CI validates line ordering semantics in addition to literal presence checks.
 
 <!-- ci-status:start -->
 ## Latest CI automation
