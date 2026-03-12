@@ -1,6 +1,6 @@
 # Rust checks report
 
-- Format: failure
+- Format: success
 - Clippy: success
 - Tests: success
 - Build: success
