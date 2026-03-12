@@ -18,6 +18,7 @@ expected_timer_init='tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x2
 expected_timer_first_tick='tosm-os: timer tick irq=0x20 count=1 uptime_ns=10000000'
 expected_timer_third_tick='tosm-os: timer tick irq=0x20 count=3 uptime_ns=30000000'
 expected_timer_ack='tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20'
+expected_timer_handoff='tosm-os: timer handoff ticks=3 delta=3 quantum=1 uptime_ns=30000000'
 expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
 expected_interrupt_init_line='tosm-os: idt skeleton initialized\r\n'
@@ -33,6 +34,7 @@ expected_timer_init_line='tosm-os: timer init source=pit hz=100 divisor=11931 ir
 expected_timer_first_tick_line='tosm-os: timer tick irq=0x20 count=1 uptime_ns=10000000\r\n'
 expected_timer_third_tick_line='tosm-os: timer tick irq=0x20 count=3 uptime_ns=30000000\r\n'
 expected_timer_ack_line='tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20\r\n'
+expected_timer_handoff_line='tosm-os: timer handoff ticks=3 delta=3 quantum=1 uptime_ns=30000000\r\n'
 expected_exception_page_fault_line='tosm-os: exception vector 14 page fault\r\n'
 
 contract_check() {
@@ -196,6 +198,11 @@ contract_check() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_timer_handoff_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected timer-handoff CRLF contract not found"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected efi_main completion CRLF contract not found"
     exit 1
@@ -242,6 +249,11 @@ screen_transcript_contract_check() {
 
   if ! grep --fixed-strings --quiet -- "tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20" boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected VGA transcript row for timer ack line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "tosm-os: timer handoff ticks=3 delta=3 quantum=1 uptime_ns=30000000" boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected VGA transcript row for timer handoff line not found"
     exit 1
   fi
 
@@ -444,6 +456,11 @@ run_qemu_smoke() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_timer_handoff}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing timer-handoff line"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing completion line"
     exit 1
@@ -458,7 +475,7 @@ run_qemu_smoke() {
     return 2
   fi
 
-  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, timer-init, timer-first-tick, timer-third-tick, timer-ack, and completion lines"
+  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, timer-init, timer-first-tick, timer-third-tick, timer-ack, timer-handoff, and completion lines"
 }
 
 contract_check
