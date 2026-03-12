@@ -183,7 +183,10 @@ mod tests {
 
     #[test]
     fn entry_done_message_line_matches_kernel_canonical_completion_line() {
-        assert_eq!(entry_done_message_line(), b"tosm-os: efi_main completed\r\n");
+        assert_eq!(
+            entry_done_message_line(),
+            b"tosm-os: efi_main completed\r\n"
+        );
     }
 
     #[test]
