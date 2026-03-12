@@ -52,6 +52,43 @@ pub const fn boot_entry_done_line_bytes() -> &'static [u8] {
 /// Number of architectural exception vectors reserved at boot.
 pub const EXCEPTION_VECTOR_COUNT: usize = 32;
 
+const EXCEPTION_LOG_UNKNOWN_LINE: &str = "tosm-os: exception vector unknown\r\n";
+
+const EXCEPTION_LOG_LINES: [&str; EXCEPTION_VECTOR_COUNT] = [
+    "tosm-os: exception vector 00 divide error\r\n",
+    "tosm-os: exception vector 01 debug\r\n",
+    "tosm-os: exception vector 02 non-maskable interrupt\r\n",
+    "tosm-os: exception vector 03 breakpoint\r\n",
+    "tosm-os: exception vector 04 overflow\r\n",
+    "tosm-os: exception vector 05 bound range exceeded\r\n",
+    "tosm-os: exception vector 06 invalid opcode\r\n",
+    "tosm-os: exception vector 07 device not available\r\n",
+    "tosm-os: exception vector 08 double fault\r\n",
+    "tosm-os: exception vector 09 coprocessor segment overrun\r\n",
+    "tosm-os: exception vector 10 invalid tss\r\n",
+    "tosm-os: exception vector 11 segment not present\r\n",
+    "tosm-os: exception vector 12 stack-segment fault\r\n",
+    "tosm-os: exception vector 13 general protection fault\r\n",
+    "tosm-os: exception vector 14 page fault\r\n",
+    "tosm-os: exception vector 15 reserved\r\n",
+    "tosm-os: exception vector 16 x87 floating-point exception\r\n",
+    "tosm-os: exception vector 17 alignment check\r\n",
+    "tosm-os: exception vector 18 machine check\r\n",
+    "tosm-os: exception vector 19 simd floating-point exception\r\n",
+    "tosm-os: exception vector 20 virtualization exception\r\n",
+    "tosm-os: exception vector 21 control protection exception\r\n",
+    "tosm-os: exception vector 22 reserved\r\n",
+    "tosm-os: exception vector 23 reserved\r\n",
+    "tosm-os: exception vector 24 reserved\r\n",
+    "tosm-os: exception vector 25 reserved\r\n",
+    "tosm-os: exception vector 26 reserved\r\n",
+    "tosm-os: exception vector 27 hypervisor injection exception\r\n",
+    "tosm-os: exception vector 28 vmm communication exception\r\n",
+    "tosm-os: exception vector 29 security exception\r\n",
+    "tosm-os: exception vector 30 reserved\r\n",
+    "tosm-os: exception vector 31 reserved\r\n",
+];
+
 const KERNEL_CODE_SELECTOR: u16 = 0x0008;
 const INTERRUPT_GATE_PRESENT_DPL0: u8 = 0x8E;
 
@@ -130,18 +167,99 @@ pub struct IdtDescriptor {
 pub struct InterruptInitReport {
     pub vectors_initialized: usize,
     pub descriptor: IdtDescriptor,
-    pub handler_addr: usize,
+    pub first_handler_addr: usize,
+    pub last_handler_addr: usize,
 }
 
-extern "C" fn early_exception_stub() {
+extern "C" fn early_exception_spin_stub() {
     loop {
         core::hint::spin_loop();
     }
 }
 
+macro_rules! define_exception_stubs {
+    ($($stub:ident),+ $(,)?) => {
+        $(
+            extern "C" fn $stub() {
+                early_exception_spin_stub();
+            }
+        )+
+    };
+}
+
+define_exception_stubs!(
+    early_exception_stub_00,
+    early_exception_stub_01,
+    early_exception_stub_02,
+    early_exception_stub_03,
+    early_exception_stub_04,
+    early_exception_stub_05,
+    early_exception_stub_06,
+    early_exception_stub_07,
+    early_exception_stub_08,
+    early_exception_stub_09,
+    early_exception_stub_10,
+    early_exception_stub_11,
+    early_exception_stub_12,
+    early_exception_stub_13,
+    early_exception_stub_14,
+    early_exception_stub_15,
+    early_exception_stub_16,
+    early_exception_stub_17,
+    early_exception_stub_18,
+    early_exception_stub_19,
+    early_exception_stub_20,
+    early_exception_stub_21,
+    early_exception_stub_22,
+    early_exception_stub_23,
+    early_exception_stub_24,
+    early_exception_stub_25,
+    early_exception_stub_26,
+    early_exception_stub_27,
+    early_exception_stub_28,
+    early_exception_stub_29,
+    early_exception_stub_30,
+    early_exception_stub_31,
+);
+
+const EXCEPTION_STUBS: [extern "C" fn(); EXCEPTION_VECTOR_COUNT] = [
+    early_exception_stub_00,
+    early_exception_stub_01,
+    early_exception_stub_02,
+    early_exception_stub_03,
+    early_exception_stub_04,
+    early_exception_stub_05,
+    early_exception_stub_06,
+    early_exception_stub_07,
+    early_exception_stub_08,
+    early_exception_stub_09,
+    early_exception_stub_10,
+    early_exception_stub_11,
+    early_exception_stub_12,
+    early_exception_stub_13,
+    early_exception_stub_14,
+    early_exception_stub_15,
+    early_exception_stub_16,
+    early_exception_stub_17,
+    early_exception_stub_18,
+    early_exception_stub_19,
+    early_exception_stub_20,
+    early_exception_stub_21,
+    early_exception_stub_22,
+    early_exception_stub_23,
+    early_exception_stub_24,
+    early_exception_stub_25,
+    early_exception_stub_26,
+    early_exception_stub_27,
+    early_exception_stub_28,
+    early_exception_stub_29,
+    early_exception_stub_30,
+    early_exception_stub_31,
+];
+
 #[must_use]
-fn early_exception_stub_addr() -> usize {
-    early_exception_stub as *const () as usize
+fn early_exception_stub_addr(vector: usize) -> usize {
+    EXCEPTION_STUBS[vector] as *const () as usize
 }
 
 static EARLY_IDT_READY: AtomicBool = AtomicBool::new(false);
@@ -156,10 +274,9 @@ fn ensure_early_idt_populated() {
     // SAFETY: During early single-core initialization we populate a fixed static IDT table
     // exactly once before publishing readiness with release ordering.
     unsafe {
-        let handler = early_exception_stub_addr();
         let mut index = 0;
         while index < EXCEPTION_VECTOR_COUNT {
-            EARLY_IDT[index] = IdtEntry::interrupt_gate(handler);
+            EARLY_IDT[index] = IdtEntry::interrupt_gate(early_exception_stub_addr(index));
             index += 1;
         }
     }
@@ -195,7 +312,19 @@ pub fn init_early_interrupts() -> InterruptInitReport {
     InterruptInitReport {
         vectors_initialized: EXCEPTION_VECTOR_COUNT,
         descriptor,
-        handler_addr: early_exception_stub_addr(),
+        first_handler_addr: early_exception_stub_addr(0),
+        last_handler_addr: early_exception_stub_addr(EXCEPTION_VECTOR_COUNT - 1),
+    }
+}
+
+/// Returns the deterministic early exception serial log line for a given vector.
+#[must_use]
+pub fn exception_log_line(vector: u8) -> &'static str {
+    let index = usize::from(vector);
+    if index < EXCEPTION_VECTOR_COUNT {
+        EXCEPTION_LOG_LINES[index]
+    } else {
+        EXCEPTION_LOG_UNKNOWN_LINE
     }
 }
 
@@ -223,8 +352,9 @@ mod tests {
     use super::{
         boot_banner_bytes, boot_banner_line_bytes, boot_entry_done_line_bytes,
         boot_interrupt_init_line_bytes, boot_panic_line_bytes, early_idt_descriptor,
-        early_idt_entries, init_early_interrupts, IdtEntry, BOOT_BANNER, BOOT_BANNER_LINE,
-        BOOT_ENTRY_DONE_LINE, BOOT_INTERRUPT_INIT_LINE, BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
+        early_idt_entries, exception_log_line, init_early_interrupts, IdtEntry, BOOT_BANNER,
+        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_INTERRUPT_INIT_LINE, BOOT_PANIC_LINE,
+        EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -287,10 +417,11 @@ mod tests {
     }
 
     #[test]
-    fn idt_entries_point_to_common_early_stub() {
-        let first = early_idt_entries()[0].handler_addr();
-        for entry in early_idt_entries() {
-            assert_eq!(entry.handler_addr(), first);
+    fn idt_entries_use_vector_specific_early_stubs() {
+        for (vector, entry) in early_idt_entries().iter().enumerate() {
+            for next in early_idt_entries().iter().skip(vector + 1) {
+                assert_ne!(entry.handler_addr(), next.handler_addr());
+            }
         }
     }
 
@@ -309,8 +440,36 @@ mod tests {
     fn init_early_interrupts_reports_initialized_vectors() {
         let report = init_early_interrupts();
         assert_eq!(report.vectors_initialized, EXCEPTION_VECTOR_COUNT);
-        assert_eq!(report.handler_addr, early_idt_entries()[0].handler_addr());
+        assert_eq!(
+            report.first_handler_addr,
+            early_idt_entries()[0].handler_addr()
+        );
+        assert_eq!(
+            report.last_handler_addr,
+            early_idt_entries()[EXCEPTION_VECTOR_COUNT - 1].handler_addr()
+        );
+        assert_ne!(report.first_handler_addr, report.last_handler_addr);
         assert_eq!(report.descriptor, early_idt_descriptor());
+    }
+
+    #[test]
+    fn exception_log_line_exposes_named_vectors_and_unknown_fallback() {
+        assert_eq!(
+            exception_log_line(0),
+            "tosm-os: exception vector 00 divide error\r\n"
+        );
+        assert_eq!(
+            exception_log_line(14),
+            "tosm-os: exception vector 14 page fault\r\n"
+        );
+        assert_eq!(
+            exception_log_line(31),
+            "tosm-os: exception vector 31 reserved\r\n"
+        );
+        assert_eq!(
+            exception_log_line(EXCEPTION_VECTOR_COUNT as u8),
+            "tosm-os: exception vector unknown\r\n"
+        );
     }
 
     #[test]
