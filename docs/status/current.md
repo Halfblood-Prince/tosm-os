@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: serial and screen output
-- Subtask: fix CI formatting failure in the host-testable VGA writer model tests so formatting job can pass again
-- Status: completed (rewrapped long `assert_eq!` calls in `boot/uefi-entry` VGA model tests to the rustfmt-preferred multiline layout reported by CI)
+- Subtask: mirror the canonical early-boot panic line to VGA text mode in addition to COM1 serial
+- Status: completed (updated the UEFI panic path to initialize VGA boot logging and write the canonical panic line on screen as well as serial)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: resolved the smallest concrete CI failure (format job) by applying the rustfmt-expected multiline formatting to long VGA model test assertions in `boot/uefi-entry/src/lib.rs`.
-- Next slice: continue milestone 2 by extending on-screen diagnostics to cover the early panic path (mirror canonical panic line to VGA in addition to serial) while preserving deterministic row behavior.
+- Completed slice: extended `boot/uefi-entry` panic handling so panic diagnostics now mirror the canonical `tosm-os: panic in uefi-entry\r\n` line to VGA text output in addition to COM1, preserving deterministic early-boot diagnostics across serial and screen channels.
+- Next slice: add host-testable coverage for complete boot-screen transcript ordering (banner, completion, and panic-path invariants) to protect deterministic serial/screen parity as milestone 2 progresses.
 
 <!-- ci-status:start -->
 ## Latest CI automation

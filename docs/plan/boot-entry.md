@@ -52,6 +52,7 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 19. ✅ Add a minimal VGA text-mode writer in `boot/uefi-entry` and mirror canonical kernel banner/completion lines to on-screen output alongside COM1 serial logs.
 20. ✅ Add deterministic VGA row lifecycle handling by clearing the screen at boot-log start and scrolling upward (instead of wrapping) when output reaches the last text row.
 21. ✅ Add host-testable VGA writer model tests in `boot/uefi-entry` to validate init/newline/scroll semantics independent of memory-mapped hardware side effects.
+22. ✅ Mirror the canonical early-boot panic line to VGA text output (after deterministic screen init) in the UEFI panic handler so panic diagnostics stay aligned across serial and screen channels.
 
 ## Risks
 
