@@ -1,13 +1,13 @@
 {
   "workflow": "CI",
-  "run_id": "22998686369",
+  "run_id": "22998781283",
   "run_attempt": "1",
   "conclusion": "failure",
   "head_branch": "main",
-  "head_sha": "03b94b05957abf9c45ebcb84dd4152ad0f602807",
+  "head_sha": "6bd5cb19deb0f760e946b0f55964669a0850d8da",
   "event": "push",
-  "run_url": "https://github.com/Halfblood-Prince/tosm-os/actions/runs/22998686369",
-  "updated_at": "2026-03-12T11:01:19Z",
+  "run_url": "https://github.com/Halfblood-Prince/tosm-os/actions/runs/22998781283",
+  "updated_at": "2026-03-12T11:03:56Z",
   "job_results": {
     "format": "success",
     "clippy": "failure",
