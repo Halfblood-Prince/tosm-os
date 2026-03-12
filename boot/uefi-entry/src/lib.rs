@@ -16,6 +16,10 @@ const LINE_CONTROL_8N1: u8 = 0b0000_0011;
 const FIFO_ENABLE_CLEAR_14B: u8 = 0b1100_0111;
 const MODEM_CONTROL_DTR_RTS_OUT2: u8 = 0b0000_1011;
 const BAUD_DIVISOR_38400: u8 = 3;
+const VGA_TEXT_BUFFER_PHYS_ADDR: usize = 0xB8000;
+const VGA_TEXT_COLUMNS: usize = 80;
+const VGA_TEXT_ROWS: usize = 25;
+const VGA_COLOR_LIGHT_GRAY_ON_BLACK: u8 = 0x07;
 
 /// UEFI status code.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -75,6 +79,69 @@ impl SerialCom1 {
     fn transmitter_empty(&self) -> bool {
         let status = port_read_u8(COM1_PORT + LINE_STATUS_OFFSET);
         (status & LINE_STATUS_TRANSMITTER_EMPTY) != 0
+    }
+}
+
+/// Minimal VGA text buffer writer for early on-screen boot diagnostics.
+struct VgaTextWriter {
+    column: usize,
+    row: usize,
+    color: u8,
+}
+
+impl VgaTextWriter {
+    const fn new() -> Self {
+        Self {
+            column: 0,
+            row: 0,
+            color: VGA_COLOR_LIGHT_GRAY_ON_BLACK,
+        }
+    }
+
+    fn write_all(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.write_byte(byte);
+        }
+    }
+
+    fn write_byte(&mut self, byte: u8) {
+        match byte {
+            b'\n' => {
+                self.new_line();
+            }
+            b'\r' => {
+                self.column = 0;
+            }
+            _ => {
+                let index = vga_cell_index(self.row, self.column);
+                write_vga_cell(index, byte, self.color);
+                self.column += 1;
+                if self.column == VGA_TEXT_COLUMNS {
+                    self.new_line();
+                }
+            }
+        }
+    }
+
+    fn new_line(&mut self) {
+        self.column = 0;
+        self.row = (self.row + 1) % VGA_TEXT_ROWS;
+    }
+}
+
+#[must_use]
+const fn vga_cell_index(row: usize, column: usize) -> usize {
+    row * VGA_TEXT_COLUMNS + column
+}
+
+fn write_vga_cell(index: usize, ascii: u8, color: u8) {
+    let byte_offset = index.saturating_mul(2);
+    let base_ptr = VGA_TEXT_BUFFER_PHYS_ADDR as *mut u8;
+    // SAFETY: VGA text mode exposes a memory-mapped character buffer at physical address
+    // 0xB8000; this writes one character byte + one color byte at a validated in-range offset.
+    unsafe {
+        core::ptr::write_volatile(base_ptr.add(byte_offset), ascii);
+        core::ptr::write_volatile(base_ptr.add(byte_offset + 1), color);
     }
 }
 
@@ -139,9 +206,12 @@ pub const fn entry_done_message_line() -> &'static [u8] {
 /// Writes the canonical kernel entry banner to COM1 as the first concrete firmware output path.
 pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus {
     let mut serial = SerialCom1::new();
+    let mut screen = VgaTextWriter::new();
     serial.init();
     serial.write_all(kernel_entry_message_line());
+    screen.write_all(kernel_entry_message_line());
     serial.write_all(entry_done_message_line());
+    screen.write_all(entry_done_message_line());
     EfiStatus::SUCCESS
 }
 
@@ -164,7 +234,8 @@ extern crate std;
 mod tests {
     use super::{
         entry_done_message_line, kernel_entry_message_line, panic_message_line, EfiStatus,
-        BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY,
+        vga_cell_index, BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB,
+        LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
     };
 
     #[test]
@@ -203,5 +274,12 @@ mod tests {
         assert_eq!(LINE_CONTROL_DLAB, 1 << 7);
         assert_eq!(LINE_CONTROL_8N1, 0b0000_0011);
         assert_eq!(BAUD_DIVISOR_38400, 3);
+    }
+
+    #[test]
+    fn vga_cell_index_uses_row_major_layout() {
+        assert_eq!(vga_cell_index(0, 0), 0);
+        assert_eq!(vga_cell_index(0, 1), 1);
+        assert_eq!(vga_cell_index(1, 0), VGA_TEXT_COLUMNS);
     }
 }

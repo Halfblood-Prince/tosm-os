@@ -1,8 +1,8 @@
 # Current milestone
 
-- Active milestone: bootloader and entry
-- Subtask: fix smoke script unbound-variable failure after QEMU execution in CI
-- Status: completed (`tools/smoke-test.sh` now uses a stable temp-directory variable for the EXIT cleanup trap so cleanup no longer references an out-of-scope `local run_dir` under `set -u`, removing the `run_dir: unbound variable` smoke failure)
+- Active milestone: serial and screen output
+- Subtask: mirror canonical boot lines to VGA text output from UEFI entry
+- Status: completed (`boot/uefi-entry` now writes the kernel-provided canonical entry and completion lines to both COM1 and VGA text memory, so early boot diagnostics are visible on serial and screen paths)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: fixed the smallest concrete smoke failure (`./tools/smoke-test.sh: line 1: run_dir: unbound variable`) by replacing the function-local `run_dir` temp directory with a stable variable used by the EXIT trap and all QEMU runtime paths.
-- Next slice: wait for CI results for this smoke-script fix; once CI is green, mark milestone 1 complete and begin milestone 2 (`serial and screen output`) with a minimal screen-output path mirroring canonical serial boot messages.
+- Completed slice: implemented a minimal VGA text writer in `boot/uefi-entry` and wired `run_entry` to mirror canonical kernel banner and completion lines to screen output in addition to COM1 serial output.
+- Next slice: keep milestone 2 moving by adding deterministic row management for the VGA path (for example clearing/initializing first lines before writing) while preserving canonical message parity with serial output.
 
 <!-- ci-status:start -->
 ## Latest CI automation
