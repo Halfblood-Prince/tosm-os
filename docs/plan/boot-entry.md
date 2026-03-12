@@ -45,6 +45,8 @@ This keeps early milestone slices auditable and minimizes cross-cutting risk.
 
 11. ✅ Extend the smoke contract check to require the canonical early-boot panic line alongside banner and completion lines.
 
+12. ✅ Extend the smoke contract check to require explicit canonical CRLF line literals for banner, panic, and completion messages.
+
 ## Risks
 
 - Missing `x86_64-unknown-uefi` target can block UEFI build/lint/smoke steps later.
