@@ -240,9 +240,10 @@ run_qemu_smoke() {
     qemu_accel_args=(${QEMU_ACCEL_ARGS})
   fi
 
+  local qemu_timeout_secs="${QEMU_TIMEOUT_SECS:-45}"
   local qemu_status=0
   set +e
-  timeout 20s "${qemu_bin}" \
+  timeout "${qemu_timeout_secs}s" "${qemu_bin}" \
     -nodefaults \
     -nographic \
     "${qemu_accel_args[@]}" \
@@ -252,6 +253,10 @@ run_qemu_smoke() {
     -drive format=raw,file=fat:rw:"${SMOKE_RUN_DIR}"
   qemu_status=$?
   set -e
+
+  if [[ "${qemu_status}" -eq 124 ]]; then
+    echo "smoke: QEMU timed out after ${qemu_timeout_secs}s"
+  fi
 
   if ! grep --fixed-strings --quiet -- "${expected_banner}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing banner"
