@@ -27,6 +27,7 @@
 - Completed slice: hardened `tools/smoke-test.sh` QEMU execution to run with deterministic TCG single-thread acceleration by default, support override via `QEMU_ACCEL_ARGS`, and gracefully skip runtime serial assertions for local non-required QEMU failures while preserving strict CI failure behavior under `REQUIRE_QEMU_SMOKE=1`.
 - Completed slice: updated `tools/smoke-test.sh` to verify deterministic serial transcript contracts before honoring QEMU exit status, so CI-required smoke runs now pass when the expected boot transcript is complete even if QEMU aborts during shutdown with the known iothread assertion.
 - Completed slice: raised QEMU smoke timeout default from 20s to a configurable `QEMU_TIMEOUT_SECS` (default 45s), and emit an explicit timeout diagnostic before transcript assertions so slower CI boots can still produce the required paging-install line.
+- Completed slice: switched smoke QEMU default acceleration args from `-accel tcg,thread=single` to `-accel tcg` to avoid the observed iothread assertion crash path in CI runners while preserving `QEMU_ACCEL_ARGS` override behavior.
 - Next slice: begin a minimal virtual-memory API surface (address translation helpers + guard checks) to unblock allocator bring-up.
 
 <!-- ci-status:start -->
