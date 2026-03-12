@@ -303,6 +303,12 @@ pub const fn timer_init_message_line() -> &'static [u8] {
     kernel::boot_timer_init_line_bytes()
 }
 
+/// Returns the deterministic timer-first-tick line expected after first periodic tick delivery.
+#[must_use]
+pub const fn timer_first_tick_message_line() -> &'static [u8] {
+    kernel::boot_timer_first_tick_line_bytes()
+}
+
 /// Returns the deterministic exception line expected from early dispatch logging.
 #[must_use]
 pub fn exception_message_line(vector: u8) -> &'static [u8] {
@@ -365,9 +371,14 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         }
     }
 
-    let _timer_report = kernel::init_early_timer();
+    kernel::reset_early_timer_ticks();
+    let timer_report = kernel::init_early_timer();
     serial.write_all(timer_init_message_line());
     screen.write_all(timer_init_message_line());
+
+    let _first_tick = kernel::record_early_timer_tick(timer_report);
+    serial.write_all(timer_first_tick_message_line());
+    screen.write_all(timer_first_tick_message_line());
 
     serial.write_all(entry_done_message_line());
     screen.write_all(entry_done_message_line());
@@ -401,9 +412,9 @@ mod tests {
         global_allocator_ready_message_line, heap_alloc_cycle_message_line,
         heap_bootstrap_message_line, interrupt_init_message_line, kernel_entry_message_line,
         memory_init_message_line, paging_install_message_line, paging_plan_message_line,
-        panic_message_line, timer_init_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400,
-        LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
-        VGA_TEXT_ROWS,
+        panic_message_line, timer_first_tick_message_line, timer_init_message_line, vga_cell_index,
+        EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB,
+        LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
     };
 
     struct VgaWriterModel {
@@ -576,6 +587,14 @@ mod tests {
     }
 
     #[test]
+    fn timer_first_tick_message_line_matches_kernel_canonical_tick_line() {
+        assert_eq!(
+            timer_first_tick_message_line(),
+            b"tosm-os: timer tick irq=0x20 count=1 uptime_ns=10000000\r\n"
+        );
+    }
+
+    #[test]
     fn efi_status_success_value_is_zero() {
         assert_eq!(EfiStatus::SUCCESS.0, 0);
     }
@@ -612,6 +631,7 @@ mod tests {
         let global_allocator_columns = global_allocator_ready_message_line().len();
         let global_allocator_probe_columns = global_allocator_probe_message_line().len();
         let timer_columns = timer_init_message_line().len();
+        let timer_first_tick_columns = timer_first_tick_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
         assert!(panic_columns < VGA_TEXT_COLUMNS);
@@ -624,6 +644,7 @@ mod tests {
         assert!(global_allocator_columns < VGA_TEXT_COLUMNS);
         assert!(global_allocator_probe_columns < VGA_TEXT_COLUMNS);
         assert!(timer_columns < VGA_TEXT_COLUMNS);
+        assert!(timer_first_tick_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
     }
 
@@ -663,9 +684,10 @@ mod tests {
         model.write_all(global_allocator_ready_message_line());
         model.write_all(global_allocator_probe_message_line());
         model.write_all(timer_init_message_line());
+        model.write_all(timer_first_tick_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 12);
+        assert_eq!(model.row, 13);
         assert_eq!(model.column, 0);
         assert_eq!(
             model.row_text_without_trailing_blanks(0),
@@ -713,10 +735,14 @@ mod tests {
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(11),
+            b"tosm-os: timer tick irq=0x20 count=1 uptime_ns=10000000"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(12),
             b"tosm-os: efi_main completed"
         );
         assert_eq!(
-            model.row_bytes(12),
+            model.row_bytes(13),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
         );
     }
@@ -734,6 +760,7 @@ mod tests {
         model.write_all(heap_bootstrap_message_line());
         model.write_all(heap_alloc_cycle_message_line());
         model.write_all(timer_init_message_line());
+        model.write_all(timer_first_tick_message_line());
         model.write_all(entry_done_message_line());
 
         model.init_for_boot_logs();

@@ -15,6 +15,7 @@ expected_heap_alloc_cycle='tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x0
 expected_global_allocator_ready='tosm-os: global allocator ready heap=0x00400000-0x00404000'
 expected_global_allocator_probe='tosm-os: global allocator probe entries=4 checksum=0x000000000000002a'
 expected_timer_init='tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20'
+expected_timer_first_tick='tosm-os: timer tick irq=0x20 count=1 uptime_ns=10000000'
 expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
 expected_interrupt_init_line='tosm-os: idt skeleton initialized\r\n'
@@ -27,6 +28,7 @@ expected_heap_alloc_cycle_line='tosm-os: heap alloc cycle allocs=2 frees=2 curso
 expected_global_allocator_ready_line='tosm-os: global allocator ready heap=0x00400000-0x00404000\r\n'
 expected_global_allocator_probe_line='tosm-os: global allocator probe entries=4 checksum=0x000000000000002a\r\n'
 expected_timer_init_line='tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20\r\n'
+expected_timer_first_tick_line='tosm-os: timer tick irq=0x20 count=1 uptime_ns=10000000\r\n'
 expected_exception_page_fault_line='tosm-os: exception vector 14 page fault\r\n'
 
 contract_check() {
@@ -82,6 +84,11 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_timer_init}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected timer-init line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_timer_first_tick}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected timer-first-tick line not found"
     exit 1
   fi
 
@@ -160,6 +167,11 @@ contract_check() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_timer_first_tick_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected timer-first-tick CRLF contract not found"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected efi_main completion CRLF contract not found"
     exit 1
@@ -191,6 +203,11 @@ screen_transcript_contract_check() {
 
   if ! grep --fixed-strings --quiet -- "tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20" boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected VGA transcript row for timer init line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "tosm-os: timer tick irq=0x20 count=1 uptime_ns=10000000" boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected VGA transcript row for timer first tick line not found"
     exit 1
   fi
 
@@ -378,6 +395,11 @@ run_qemu_smoke() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_timer_first_tick}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing timer-first-tick line"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing completion line"
     exit 1
@@ -392,7 +414,7 @@ run_qemu_smoke() {
     return 2
   fi
 
-  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, timer-init, and completion lines"
+  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, timer-init, timer-first-tick, and completion lines"
 }
 
 contract_check
