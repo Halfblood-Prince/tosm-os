@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: serial and screen output
-- Subtask: add smoke automation coverage for VGA transcript scrolling behavior so CI enforces deterministic last-row lifecycle semantics alongside boot/panic ordering contracts
-- Status: completed (smoke automation now executes targeted host tests that assert deterministic VGA boot/panic transcript ordering plus scrolling lifecycle contracts before QEMU runtime checks)
+- Subtask: add smoke automation coverage for VGA carriage-return and row-wrap behavior so CI enforces deterministic in-row overwrite and width-boundary newline semantics alongside init/newline/ordering/scrolling contracts
+- Status: completed (smoke automation now executes targeted host tests that assert deterministic VGA initialization, newline destination-row clearing, transcript ordering, and last-row scrolling lifecycle contracts before QEMU runtime checks)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: extended `tools/smoke-test.sh` with an explicit transcript-test list that now includes the VGA scroll lifecycle model test, so smoke automation enforces deterministic last-row clear-and-scroll behavior in addition to boot/panic ordering checks.
-- Next slice: add smoke automation coverage for VGA initialization and newline-row clearing behavior so CI enforces deterministic first-frame and destination-row hygiene contracts alongside ordering/scrolling guarantees.
+- Completed slice: extended `tools/smoke-test.sh` transcript test list to include the VGA initialization reset and newline destination-row clearing model tests, so smoke automation now gates first-frame hygiene and newline row-clearing behavior in addition to transcript ordering and scrolling semantics.
+- Next slice: add smoke automation coverage for VGA carriage-return overwrite and row-wrap behavior so CI enforces deterministic in-row reset and width-boundary line-advance semantics.
 
 <!-- ci-status:start -->
 ## Latest CI automation
