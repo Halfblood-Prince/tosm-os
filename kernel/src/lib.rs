@@ -68,6 +68,10 @@ pub const BOOT_TIMER_ACK_LINE: &str = "tosm-os: timer ack irq=0x20 pic=0x20 eoi=
 pub const BOOT_TIMER_HANDOFF_LINE: &str =
     "tosm-os: timer handoff ticks=3 delta=3 quantum=1 uptime_ns=30000000\r\n";
 
+/// Canonical scheduler-bootstrap line emitted for timer-driven run-queue handoff contracts.
+pub const BOOT_SCHEDULER_HANDOFF_LINE: &str =
+    "tosm-os: scheduler handoff reason=timer runq=2 selected=1 idle=0 delta=3\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -168,6 +172,12 @@ pub const fn boot_timer_ack_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_timer_handoff_line_bytes() -> &'static [u8] {
     BOOT_TIMER_HANDOFF_LINE.as_bytes()
+}
+
+/// Returns the canonical scheduler-handoff line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_scheduler_handoff_line_bytes() -> &'static [u8] {
+    BOOT_SCHEDULER_HANDOFF_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -383,6 +393,36 @@ pub struct EarlyTimerHandoffReport {
     pub scheduler_quantum_elapsed: bool,
 }
 
+/// Reasons that can drive an early scheduler handoff.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlySchedulerHandoffReason {
+    Timer,
+    Yield,
+}
+
+/// Deterministic scheduler slot record used for early run-queue modeling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerSlot {
+    pub task_id: u32,
+    pub runnable: bool,
+}
+
+/// Snapshot report describing deterministic early scheduler queue state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerSnapshot {
+    pub run_queue_depth: usize,
+    pub selected_task_id: u32,
+    pub idle_task_id: u32,
+    pub handoff_reason: EarlySchedulerHandoffReason,
+}
+
+/// Combined timer+scheduler report used for early threads milestone integration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerTimerHandoffReport {
+    pub timer: EarlyTimerHandoffReport,
+    pub scheduler: EarlySchedulerSnapshot,
+}
+
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
 pub const EARLY_PAGING_FRAME_WINDOW_FRAMES: usize = 4;
 pub const EARLY_IDENTITY_MAP_PAGES_4K: usize = 512;
@@ -402,8 +442,17 @@ const EARLY_TIMER_TARGET_HZ: u64 = 100;
 const TIMER_IRQ_VECTOR: u8 = 0x20;
 const PIC_MASTER_COMMAND_PORT: u16 = 0x20;
 const PIC_NON_SPECIFIC_EOI: u8 = 0x20;
+const EARLY_SCHEDULER_MAX_SLOTS: usize = 4;
+const EARLY_IDLE_TASK_ID: u32 = 0;
+const EARLY_BOOTSTRAP_TASK_ID: u32 = 1;
 static EARLY_TIMER_TICK_COUNT: AtomicU64 = AtomicU64::new(0);
 static EARLY_TIMER_LAST_HANDOFF_TICK: AtomicU64 = AtomicU64::new(0);
+static EARLY_SCHEDULER_SELECTED_INDEX: AtomicU64 = AtomicU64::new(0);
+static mut EARLY_SCHEDULER_SLOTS: [EarlySchedulerSlot; EARLY_SCHEDULER_MAX_SLOTS] =
+    [EarlySchedulerSlot {
+        task_id: 0,
+        runnable: false,
+    }; EARLY_SCHEDULER_MAX_SLOTS];
 
 /// Returns true when a value is 4KiB aligned.
 #[must_use]
@@ -1109,6 +1158,27 @@ pub fn reset_early_timer_ticks() {
     EARLY_TIMER_LAST_HANDOFF_TICK.store(0, Ordering::SeqCst);
 }
 
+/// Initializes deterministic early scheduler queue slots used by timer-driven handoff paths.
+pub fn reset_early_scheduler_state() {
+    // SAFETY: deterministic early scheduler model is single-threaded during boot/test setup.
+    unsafe {
+        EARLY_SCHEDULER_SLOTS = [EarlySchedulerSlot {
+            task_id: 0,
+            runnable: false,
+        }; EARLY_SCHEDULER_MAX_SLOTS];
+        EARLY_SCHEDULER_SLOTS[0] = EarlySchedulerSlot {
+            task_id: EARLY_IDLE_TASK_ID,
+            runnable: true,
+        };
+        EARLY_SCHEDULER_SLOTS[1] = EarlySchedulerSlot {
+            task_id: EARLY_BOOTSTRAP_TASK_ID,
+            runnable: true,
+        };
+    }
+
+    EARLY_SCHEDULER_SELECTED_INDEX.store(0, Ordering::SeqCst);
+}
+
 /// Records a deterministic early timer tick and reports cumulative periodic accounting state.
 #[must_use]
 pub fn record_early_timer_tick(config: EarlyTimerInitReport) -> EarlyTimerTickReport {
@@ -1166,6 +1236,49 @@ pub fn take_early_timer_handoff(config: EarlyTimerInitReport) -> EarlyTimerHando
     let report = sample_early_timer_handoff(config);
     EARLY_TIMER_LAST_HANDOFF_TICK.store(report.total_ticks, Ordering::SeqCst);
     report
+}
+
+/// Returns a deterministic snapshot of the modeled early scheduler run queue state.
+#[must_use]
+pub fn sample_early_scheduler_snapshot(
+    reason: EarlySchedulerHandoffReason,
+) -> EarlySchedulerSnapshot {
+    let mut run_queue_depth = 0;
+    // SAFETY: read-only traversal of deterministic static slots in single-threaded boot model.
+    unsafe {
+        let mut slot_index = 0;
+        while slot_index < EARLY_SCHEDULER_MAX_SLOTS {
+            if EARLY_SCHEDULER_SLOTS[slot_index].runnable {
+                run_queue_depth += 1;
+            }
+            slot_index += 1;
+        }
+    }
+
+    let selected_index = EARLY_SCHEDULER_SELECTED_INDEX.load(Ordering::SeqCst) as usize;
+    // SAFETY: selected index is always written through bounded deterministic state transitions.
+    let selected_task_id = unsafe { EARLY_SCHEDULER_SLOTS[selected_index].task_id };
+
+    EarlySchedulerSnapshot {
+        run_queue_depth,
+        selected_task_id,
+        idle_task_id: EARLY_IDLE_TASK_ID,
+        handoff_reason: reason,
+    }
+}
+
+/// Advances deterministic scheduler selection using timer handoff delta and returns combined state.
+#[must_use]
+pub fn take_early_scheduler_timer_handoff(
+    config: EarlyTimerInitReport,
+) -> EarlySchedulerTimerHandoffReport {
+    let timer = take_early_timer_handoff(config);
+    if timer.scheduler_quantum_elapsed {
+        EARLY_SCHEDULER_SELECTED_INDEX.store(EARLY_BOOTSTRAP_TASK_ID as u64, Ordering::SeqCst);
+    }
+
+    let scheduler = sample_early_scheduler_snapshot(EarlySchedulerHandoffReason::Timer);
+    EarlySchedulerTimerHandoffReport { timer, scheduler }
 }
 
 /// Number of architectural exception vectors reserved at boot.
@@ -1514,7 +1627,8 @@ mod tests {
         boot_heap_alloc_cycle_line_bytes, boot_heap_bootstrap_line_bytes,
         boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
         boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
-        boot_timer_ack_line_bytes, boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
+        boot_scheduler_handoff_line_bytes, boot_timer_ack_line_bytes,
+        boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
         boot_timer_init_line_bytes, boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
         dispatch_early_timer_interrupt, dispatch_exception, early_idt_descriptor,
         early_idt_entries, early_paging_table_snapshot, early_physical_memory_map,
@@ -1522,18 +1636,18 @@ mod tests {
         init_early_global_allocator, init_early_interrupts, init_early_paging_plan,
         init_early_physical_memory, init_early_timer, install_early_paging,
         is_canonical_virtual_address, is_page_aligned_4k, record_early_timer_tick,
-        reset_early_timer_ticks, run_early_global_allocator_probe, run_early_heap_alloc_cycle,
-        sample_early_timer_handoff, take_early_timer_handoff, translate_early_virtual_to_physical,
-        EarlyFrameAllocationError, EarlyFrameAllocator, EarlyHeapAllocationError,
-        EarlyHeapAllocator, EarlyHeapBootstrapError, EarlyHeapDeallocationError,
-        EarlyHeapOperationError, GlobalAllocatorInitError, IdtEntry, PhysicalMemoryRegionKind,
-        VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER, BOOT_BANNER_LINE,
-        BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE, BOOT_GLOBAL_ALLOCATOR_READY_LINE,
-        BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE, BOOT_INTERRUPT_INIT_LINE,
-        BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE,
-        BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE,
-        BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR,
-        EXCEPTION_VECTOR_COUNT,
+        reset_early_scheduler_state, reset_early_timer_ticks, run_early_global_allocator_probe,
+        run_early_heap_alloc_cycle, sample_early_timer_handoff, take_early_scheduler_timer_handoff,
+        take_early_timer_handoff, translate_early_virtual_to_physical, EarlyFrameAllocationError,
+        EarlyFrameAllocator, EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
+        EarlyHeapDeallocationError, EarlyHeapOperationError, GlobalAllocatorInitError, IdtEntry,
+        PhysicalMemoryRegionKind, VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER,
+        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE,
+        BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
+        BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
+        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_SCHEDULER_HANDOFF_LINE, BOOT_TIMER_ACK_LINE,
+        BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE,
+        BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -2204,6 +2318,18 @@ mod tests {
     }
 
     #[test]
+    fn boot_scheduler_handoff_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_SCHEDULER_HANDOFF_LINE,
+            "tosm-os: scheduler handoff reason=timer runq=2 selected=1 idle=0 delta=3\r\n"
+        );
+        assert_eq!(
+            boot_scheduler_handoff_line_bytes(),
+            b"tosm-os: scheduler handoff reason=timer runq=2 selected=1 idle=0 delta=3\r\n"
+        );
+    }
+
+    #[test]
     fn timer_handoff_sampling_and_take_track_delta_watermark() {
         reset_early_timer_ticks();
         let timer = init_early_timer();
@@ -2236,6 +2362,31 @@ mod tests {
         assert!(!after.scheduler_quantum_elapsed);
 
         reset_early_timer_ticks();
+    }
+
+    #[test]
+    fn scheduler_timer_handoff_selects_bootstrap_task_after_quantum_elapsed() {
+        reset_early_timer_ticks();
+        reset_early_scheduler_state();
+        let timer = init_early_timer();
+
+        let before = take_early_scheduler_timer_handoff(timer);
+        assert_eq!(before.timer.total_ticks, 0);
+        assert_eq!(before.scheduler.run_queue_depth, 2);
+        assert_eq!(before.scheduler.selected_task_id, 0);
+
+        let _first = dispatch_early_timer_interrupt(timer);
+        let _second = dispatch_early_timer_interrupt(timer);
+        let _third = dispatch_early_timer_interrupt(timer);
+
+        let after = take_early_scheduler_timer_handoff(timer);
+        assert_eq!(after.timer.ticks_since_last_handoff, 3);
+        assert_eq!(after.scheduler.run_queue_depth, 2);
+        assert_eq!(after.scheduler.selected_task_id, 1);
+        assert_eq!(after.scheduler.idle_task_id, 0);
+
+        reset_early_timer_ticks();
+        reset_early_scheduler_state();
     }
 
     #[test]
