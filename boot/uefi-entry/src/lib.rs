@@ -134,11 +134,10 @@ pub const fn entry_done_message_line() -> &'static [u8] {
     kernel::boot_entry_done_line_bytes()
 }
 
-/// UEFI ABI entrypoint for the boot milestone.
+/// Shared boot entry implementation used by the UEFI application entry symbol.
 ///
 /// Writes the canonical kernel entry banner to COM1 as the first concrete firmware output path.
-#[no_mangle]
-pub extern "efiapi" fn efi_main(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus {
+pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus {
     let mut serial = SerialCom1::new();
     serial.init();
     serial.write_all(kernel_entry_message_line());
