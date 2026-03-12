@@ -3,12 +3,12 @@
 - Workflow: CI
 - Conclusion: success
 - Branch: main
-- Commit: `005ebc078dc8ddbbf6a34b9c933a32a717ce6588`
-- Run ID: 23022662170
+- Commit: `613739bac94ce4d2be7345379f54bbc7728db9d2`
+- Run ID: 23023127141
 - Run attempt: 1
 - Event: push
-- Updated at: 2026-03-12T20:37:33Z
-- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23022662170
+- Updated at: 2026-03-12T20:49:37Z
+- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23023127141
 
 ## Job results
 
@@ -33,25 +33,25 @@ Recommended next action: **continue the next unfinished milestone slice; do not 
 - `tests`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name bootx64 --edition=2021 boot/uefi-entry/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=f8ed4a52099efd2f -C extra-filename=-60f3d71e13d89e2f --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib`
 - `tests`: test tests::boot_panic_line_bytes_include_crlf ... ok
 - `tests`: test tests::early_heap_bootstrap_propagates_frame_allocator_errors ... ok
-- `tests`: test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-- `tests`: test tests::model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines ... ok
+- `tests`: test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: test tests::model_panic_line_renders_on_first_row_after_init ... ok
+- `tests`: test tests::model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines ... ok
 - `tests`: test tests::panic_message_line_matches_kernel_canonical_panic_line ... ok
-- `tests`: test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+- `tests`: test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustdoc --edition=2021 --crate-type lib --color always --crate-name kernel --test kernel/src/lib.rs --test-run-directory /home/runner/work/tosm-os/tosm-os/kernel --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps -C embed-bitcode=no --cfg 'feature="default"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default"))' --error-format human`
 - `tests`: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustdoc --edition=2021 --crate-type lib --color always --crate-name uefi_entry --test boot/uefi-entry/src/lib.rs --test-run-directory /home/runner/work/tosm-os/tosm-os/boot/uefi-entry --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps -C embed-bitcode=no --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' --error-format human`
 - `tests`: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `build`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name bootx64 --edition=2021 boot/uefi-entry/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=6b5032e417c7913e -C extra-filename=-cf7c0a985f3d483b --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib`
-- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.00s
+- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
 - `smoke`: test tests::model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines ... ok
-- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.00s
-- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.00s
-- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.00s
-- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.00s
-- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.00s
-- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.00s
+- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+- `smoke`: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
 
 ## Stored reports
 
