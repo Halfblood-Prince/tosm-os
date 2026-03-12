@@ -1,7 +1,7 @@
 smoke: serial message contracts present
 [1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.34s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
 running 1 test
@@ -28,6 +28,6 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; fin
 smoke: VGA transcript ordering and scrolling contracts present
 [1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
-qemu-system-x86_64: terminating on signal 15 from pid 4121 (timeout)
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+qemu-system-x86_64: terminating on signal 15 from pid 4170 (timeout)
 smoke: QEMU boot output includes banner and completion line
