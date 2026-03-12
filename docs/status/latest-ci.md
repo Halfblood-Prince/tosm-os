@@ -3,12 +3,12 @@
 - Workflow: CI
 - Conclusion: success
 - Branch: main
-- Commit: `20f471312a79ff05f820a35987e0b96023cf1d2a`
-- Run ID: 23004069384
+- Commit: `2c7e943b58172267bff4ccacb8039f988e4c9070`
+- Run ID: 23004556312
 - Run attempt: 1
 - Event: push
-- Updated at: 2026-03-12T13:24:05Z
-- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23004069384
+- Updated at: 2026-03-12T13:35:42Z
+- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23004556312
 
 ## Job results
 
@@ -34,7 +34,7 @@ Recommended next action: **continue the next unfinished milestone slice; do not 
 - `tests`: test tests::boot_panic_line_bytes_include_crlf ... ok
 - `tests`: test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: test tests::panic_message_line_matches_kernel_canonical_panic_line ... ok
-- `tests`: test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+- `tests`: test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustdoc --edition=2021 --crate-type lib --color always --crate-name kernel --test kernel/src/lib.rs --test-run-directory /home/runner/work/tosm-os/tosm-os/kernel --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps -C embed-bitcode=no --cfg 'feature="default"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default"))' --error-format human`
 - `tests`: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
