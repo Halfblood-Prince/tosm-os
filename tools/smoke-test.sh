@@ -13,6 +13,7 @@ expected_paging_install='tosm-os: paging install root=0x3f7ed000 span=0x40000000
 expected_heap_bootstrap='tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4'
 expected_heap_alloc_cycle='tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000'
 expected_global_allocator_ready='tosm-os: global allocator ready heap=0x00400000-0x00404000'
+expected_global_allocator_probe='tosm-os: global allocator probe entries=4 checksum=0x000000000000002a'
 expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
 expected_interrupt_init_line='tosm-os: idt skeleton initialized\r\n'
@@ -23,6 +24,7 @@ expected_paging_install_line='tosm-os: paging install root=0x3f7ed000 span=0x400
 expected_heap_bootstrap_line='tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4\r\n'
 expected_heap_alloc_cycle_line='tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000\r\n'
 expected_global_allocator_ready_line='tosm-os: global allocator ready heap=0x00400000-0x00404000\r\n'
+expected_global_allocator_probe_line='tosm-os: global allocator probe entries=4 checksum=0x000000000000002a\r\n'
 expected_exception_page_fault_line='tosm-os: exception vector 14 page fault\r\n'
 
 contract_check() {
@@ -68,6 +70,11 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_global_allocator_ready}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected global-allocator-ready line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_global_allocator_probe}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected global-allocator-probe line not found"
     exit 1
   fi
 
@@ -136,6 +143,11 @@ contract_check() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_global_allocator_probe_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected global-allocator-probe CRLF line contract not found"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected efi_main completion CRLF contract not found"
     exit 1
@@ -164,6 +176,11 @@ screen_transcript_contract_check() {
   for test_name in "${transcript_tests[@]}"; do
     cargo test --package uefi-entry --lib "${test_name}"
   done
+
+  if ! grep --fixed-strings --quiet -- "tosm-os: global allocator probe entries=4 checksum=0x000000000000002a" boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected VGA transcript row for global allocator probe line not found"
+    exit 1
+  fi
 
   echo "smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/memory-reporting/paging-plan-reporting/scrolling contracts present"
 }
@@ -339,6 +356,11 @@ run_qemu_smoke() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_global_allocator_probe}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing global-allocator-probe line"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing completion line"
     exit 1
@@ -353,7 +375,7 @@ run_qemu_smoke() {
     return 2
   fi
 
-  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, and completion lines"
+  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, and completion lines"
 }
 
 contract_check

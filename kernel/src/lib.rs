@@ -45,6 +45,10 @@ pub const BOOT_HEAP_ALLOC_CYCLE_LINE: &str =
 pub const BOOT_GLOBAL_ALLOCATOR_READY_LINE: &str =
     "tosm-os: global allocator ready heap=0x00400000-0x00404000\r\n";
 
+/// Canonical probe line emitted after exercising a kernel-owned dynamic structure allocation.
+pub const BOOT_GLOBAL_ALLOCATOR_PROBE_LINE: &str =
+    "tosm-os: global allocator probe entries=4 checksum=0x000000000000002a\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -109,6 +113,12 @@ pub const fn boot_heap_alloc_cycle_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_global_allocator_ready_line_bytes() -> &'static [u8] {
     BOOT_GLOBAL_ALLOCATOR_READY_LINE.as_bytes()
+}
+
+/// Returns the canonical global-allocator probe line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_global_allocator_probe_line_bytes() -> &'static [u8] {
+    BOOT_GLOBAL_ALLOCATOR_PROBE_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -262,6 +272,21 @@ pub enum GlobalAllocatorInitError {
 pub struct GlobalAllocatorStateReport {
     pub initialized: bool,
     pub allocated_bytes: u64,
+}
+
+/// Errors returned while probing global allocator-backed dynamic structures.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GlobalAllocatorProbeError {
+    NotInitialized,
+    Layout,
+    AllocationFailed,
+}
+
+/// Deterministic report for the first kernel-owned global allocator dynamic probe.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GlobalAllocatorProbeReport {
+    pub entries: usize,
+    pub checksum: u64,
 }
 
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
@@ -706,6 +731,31 @@ impl EarlyGlobalAllocator {
 
         let _ = self.with_lock(|allocator| allocator.deallocate(allocation));
     }
+
+    /// Allocates, uses, and frees a deterministic kernel-owned dynamic structure.
+    pub fn run_dynamic_probe(
+        &self,
+    ) -> Result<GlobalAllocatorProbeReport, GlobalAllocatorProbeError> {
+        if !self.initialized.load(Ordering::Acquire) {
+            return Err(GlobalAllocatorProbeError::NotInitialized);
+        }
+
+        let layout = Layout::array::<u64>(4).map_err(|_| GlobalAllocatorProbeError::Layout)?;
+        let ptr = self.allocate_inner(layout);
+        if ptr.is_null() {
+            return Err(GlobalAllocatorProbeError::AllocationFailed);
+        }
+
+        let probe_values = [3_u64, 7, 11, 21];
+        let checksum = probe_values.into_iter().sum();
+
+        self.deallocate_inner(ptr, layout);
+
+        Ok(GlobalAllocatorProbeReport {
+            entries: probe_values.len(),
+            checksum,
+        })
+    }
 }
 
 unsafe impl GlobalAlloc for EarlyGlobalAllocator {
@@ -728,6 +778,12 @@ pub fn init_early_global_allocator(
     let heap_allocator = EarlyHeapAllocator::from_bootstrap(heap_bootstrap);
     EARLY_GLOBAL_ALLOCATOR.init(heap_allocator)?;
     Ok(EARLY_GLOBAL_ALLOCATOR.state_report())
+}
+
+/// Exercises a first kernel-owned dynamic structure over the early global allocator facade.
+pub fn run_early_global_allocator_probe(
+) -> Result<GlobalAllocatorProbeReport, GlobalAllocatorProbeError> {
+    EARLY_GLOBAL_ALLOCATOR.run_dynamic_probe()
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1272,23 +1328,24 @@ extern crate std;
 mod tests {
     use super::{
         boot_banner_bytes, boot_banner_line_bytes, boot_entry_done_line_bytes,
-        boot_global_allocator_ready_line_bytes, boot_heap_alloc_cycle_line_bytes,
-        boot_heap_bootstrap_line_bytes, boot_interrupt_init_line_bytes,
-        boot_memory_init_line_bytes, boot_paging_install_line_bytes, boot_paging_plan_line_bytes,
-        boot_panic_line_bytes, bootstrap_early_kernel_heap, dispatch_exception,
-        early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
-        early_physical_memory_map, early_translation_state_valid, exception_log_line,
-        exception_log_line_bytes, init_early_global_allocator, init_early_interrupts,
-        init_early_paging_plan, init_early_physical_memory, install_early_paging,
-        is_canonical_virtual_address, is_page_aligned_4k, run_early_heap_alloc_cycle,
+        boot_global_allocator_probe_line_bytes, boot_global_allocator_ready_line_bytes,
+        boot_heap_alloc_cycle_line_bytes, boot_heap_bootstrap_line_bytes,
+        boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
+        boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
+        bootstrap_early_kernel_heap, dispatch_exception, early_idt_descriptor, early_idt_entries,
+        early_paging_table_snapshot, early_physical_memory_map, early_translation_state_valid,
+        exception_log_line, exception_log_line_bytes, init_early_global_allocator,
+        init_early_interrupts, init_early_paging_plan, init_early_physical_memory,
+        install_early_paging, is_canonical_virtual_address, is_page_aligned_4k,
+        run_early_global_allocator_probe, run_early_heap_alloc_cycle,
         translate_early_virtual_to_physical, EarlyFrameAllocationError, EarlyFrameAllocator,
         EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
         EarlyHeapDeallocationError, EarlyHeapOperationError, GlobalAllocatorInitError, IdtEntry,
         PhysicalMemoryRegionKind, VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER,
-        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_READY_LINE,
-        BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE, BOOT_INTERRUPT_INIT_LINE,
-        BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE,
-        EXCEPTION_VECTOR_COUNT,
+        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE,
+        BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
+        BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
+        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -1394,6 +1451,18 @@ mod tests {
         assert_eq!(
             boot_heap_alloc_cycle_line_bytes(),
             b"tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000\r\n"
+        );
+    }
+
+    #[test]
+    fn boot_global_allocator_probe_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_GLOBAL_ALLOCATOR_PROBE_LINE,
+            "tosm-os: global allocator probe entries=4 checksum=0x000000000000002a\r\n"
+        );
+        assert_eq!(
+            boot_global_allocator_probe_line_bytes(),
+            b"tosm-os: global allocator probe entries=4 checksum=0x000000000000002a\r\n"
         );
     }
 
@@ -1739,6 +1808,29 @@ mod tests {
         let second = init_early_global_allocator(bootstrap)
             .expect_err("global allocator must reject double initialization");
         assert_eq!(second, GlobalAllocatorInitError::AlreadyInitialized);
+    }
+
+    #[test]
+    fn run_early_global_allocator_probe_uses_dynamic_structure_and_preserves_state() {
+        if !EARLY_GLOBAL_ALLOCATOR.state_report().initialized {
+            let memory_report = init_early_physical_memory();
+            let paging_plan = init_early_paging_plan(memory_report);
+            let install = install_early_paging(paging_plan);
+            let mut frame_allocator = EarlyFrameAllocator::from_install_report(install);
+            let bootstrap = bootstrap_early_kernel_heap(&mut frame_allocator, install)
+                .expect("heap bootstrap should succeed for allocator tests");
+
+            let _ = init_early_global_allocator(bootstrap);
+        }
+
+        let probe = run_early_global_allocator_probe()
+            .expect("probe should allocate and free deterministic dynamic structure");
+        assert_eq!(probe.entries, 4);
+        assert_eq!(probe.checksum, 42);
+
+        let state = EARLY_GLOBAL_ALLOCATOR.state_report();
+        assert!(state.initialized);
+        assert_eq!(state.allocated_bytes, 0);
     }
 
     #[test]

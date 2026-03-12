@@ -5,8 +5,8 @@
 3. [x] interrupt setup
 4. [x] physical memory management
 5. [x] paging / virtual memory
-6. [ ] kernel allocator (active)
-7. [ ] timer support
+6. [x] kernel allocator
+7. [ ] timer support (active)
 8. [ ] scheduler / threads
 9. [ ] syscalls
 10. [ ] ELF loading
