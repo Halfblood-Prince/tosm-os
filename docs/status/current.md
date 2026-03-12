@@ -1,8 +1,8 @@
 # Current milestone
 
-- Active milestone: serial and screen output
-- Subtask: add smoke automation coverage for VGA carriage-return and row-wrap behavior so CI enforces deterministic in-row overwrite and width-boundary newline semantics alongside init/newline/ordering/scrolling contracts
-- Status: completed (smoke automation now executes targeted host tests that assert deterministic VGA initialization, newline destination-row clearing, transcript ordering, and last-row scrolling lifecycle contracts before QEMU runtime checks)
+- Active milestone: interrupt setup
+- Subtask: add an IDT skeleton with deterministic exception handlers and early initialization path wiring that can be validated by host tests.
+- Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: extended `tools/smoke-test.sh` transcript test list to include the VGA initialization reset and newline destination-row clearing model tests, so smoke automation now gates first-frame hygiene and newline row-clearing behavior in addition to transcript ordering and scrolling semantics.
-- Next slice: add smoke automation coverage for VGA carriage-return overwrite and row-wrap behavior so CI enforces deterministic in-row reset and width-boundary line-advance semantics.
+- Completed slice: expanded VGA transcript smoke automation to include carriage-return overwrite and width-boundary wrap contracts, and added matching host-model tests in `uefi-entry` so smoke now enforces deterministic in-row reset and boundary line-advance behavior in addition to initialization/newline/ordering/scrolling checks.
+- Next slice: add an IDT skeleton with deterministic exception handlers and early initialization path wiring that can be validated by host tests.
 
 <!-- ci-status:start -->
 ## Latest CI automation

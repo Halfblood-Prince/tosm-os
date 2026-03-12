@@ -540,6 +540,34 @@ mod tests {
     }
 
     #[test]
+    fn model_carriage_return_resets_column_and_overwrites_in_place() {
+        let mut model = VgaWriterModel::new();
+        model.init_for_boot_logs();
+        model.write_all(b"ABCD\rxy");
+
+        assert_eq!(model.row, 0);
+        assert_eq!(model.column, 2);
+        assert_eq!(model.row_bytes(0)[0..4], [b'x', b'y', b'C', b'D']);
+    }
+
+    #[test]
+    fn model_width_boundary_wrap_advances_to_next_row_and_clears_it() {
+        let mut model = VgaWriterModel::new();
+        model.init_for_boot_logs();
+
+        let full_row = [b'A'; VGA_TEXT_COLUMNS];
+        model.write_all(&full_row);
+
+        assert_eq!(model.row, 1);
+        assert_eq!(model.column, 0);
+        assert_eq!(model.row_bytes(0), [b'A'; VGA_TEXT_COLUMNS]);
+        assert_eq!(
+            model.row_bytes(1),
+            [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
+        );
+    }
+
+    #[test]
     fn model_scroll_moves_rows_up_and_clears_last_row() {
         let mut model = VgaWriterModel::new();
         model.init_for_boot_logs();
