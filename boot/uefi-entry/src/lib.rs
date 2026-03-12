@@ -122,6 +122,12 @@ pub const fn kernel_entry_message_line() -> &'static [u8] {
     kernel::boot_banner_line_bytes()
 }
 
+/// Returns the deterministic early-boot panic line expected by firmware panic paths.
+#[must_use]
+pub const fn panic_message_line() -> &'static [u8] {
+    kernel::boot_panic_line_bytes()
+}
+
 /// UEFI ABI entrypoint for the boot milestone.
 ///
 /// Writes the canonical kernel entry banner to COM1 as the first concrete firmware output path.
@@ -141,7 +147,7 @@ use core::panic::PanicInfo;
 fn panic(_info: &PanicInfo<'_>) -> ! {
     let mut serial = SerialCom1::new();
     serial.init();
-    serial.write_all(b"tosm-os: panic in uefi-entry\r\n");
+    serial.write_all(panic_message_line());
     loop {}
 }
 
@@ -151,8 +157,8 @@ extern crate std;
 #[cfg(test)]
 mod tests {
     use super::{
-        kernel_entry_message_line, EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1,
-        LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY,
+        kernel_entry_message_line, panic_message_line, EfiStatus, BAUD_DIVISOR_38400,
+        LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY,
     };
 
     #[test]
@@ -161,6 +167,11 @@ mod tests {
             kernel_entry_message_line(),
             b"tosm-os: kernel entry reached\r\n"
         );
+    }
+
+    #[test]
+    fn panic_message_line_matches_kernel_canonical_panic_line() {
+        assert_eq!(panic_message_line(), b"tosm-os: panic in uefi-entry\r\n");
     }
 
     #[test]

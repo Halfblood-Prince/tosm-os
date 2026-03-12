@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: initialize COM1 UART defaults before boot banner transmit
-- Status: in_progress (UART init slice implemented; awaiting CI run)
+- Subtask: centralize early-boot panic serial line in kernel banner API
+- Status: in_progress (panic-line centralization slice implemented; awaiting CI run)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
