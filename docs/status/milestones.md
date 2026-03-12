@@ -3,8 +3,8 @@
 1. [x] bootloader and entry
 2. [x] serial and screen output
 3. [x] interrupt setup
-4. [ ] physical memory management (active)
-5. [ ] paging / virtual memory
+4. [x] physical memory management
+5. [ ] paging / virtual memory (active)
 6. [ ] kernel allocator
 7. [ ] timer support
 8. [ ] scheduler / threads

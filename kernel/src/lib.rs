@@ -27,6 +27,10 @@ pub const BOOT_MEMORY_INIT_LINE: &str =
 pub const BOOT_PAGING_PLAN_LINE: &str =
     "tosm-os: paging plan frames=4 window=0x3f7ed000-0x3f7f1000 map4k=512\r\n";
 
+/// Canonical paging-install line emitted after early page tables are materialized.
+pub const BOOT_PAGING_INSTALL_LINE: &str =
+    "tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -67,6 +71,12 @@ pub const fn boot_memory_init_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_paging_plan_line_bytes() -> &'static [u8] {
     BOOT_PAGING_PLAN_LINE.as_bytes()
+}
+
+/// Returns the canonical paging-install line (including CRLF) for serial transmitters.
+#[must_use]
+pub const fn boot_paging_install_line_bytes() -> &'static [u8] {
+    BOOT_PAGING_INSTALL_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -113,9 +123,76 @@ pub struct EarlyPagingPlanReport {
     pub identity_map_pages_4k: usize,
 }
 
+/// Deterministic report describing the materialized early paging structures.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyPagingInstallReport {
+    pub root_table_phys_addr: u64,
+    pub pdpt_phys_addr: u64,
+    pub pd_phys_addr: u64,
+    pub mapped_span_bytes: u64,
+    pub present_entry_count: usize,
+    pub installed_into_cpu: bool,
+}
+
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
 pub const EARLY_PAGING_FRAME_WINDOW_FRAMES: usize = 4;
 pub const EARLY_IDENTITY_MAP_PAGES_4K: usize = 512;
+
+const PAGE_TABLE_ENTRY_PRESENT: u64 = 1 << 0;
+const PAGE_TABLE_ENTRY_WRITABLE: u64 = 1 << 1;
+const PAGE_TABLE_ENTRY_HUGE_PAGE: u64 = 1 << 7;
+const PAGE_TABLE_ENTRY_ADDR_MASK: u64 = 0x000f_ffff_ffff_f000;
+const PAGE_SIZE_2M_BYTES: u64 = 0x20_0000;
+const ENTRIES_PER_PAGE_TABLE: usize = 512;
+const EARLY_PAGING_PRESENT_ENTRY_COUNT: usize = 1 + 1 + EARLY_IDENTITY_MAP_PAGES_4K;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(transparent)]
+struct PageTableEntry(u64);
+
+impl PageTableEntry {
+    #[must_use]
+    const fn empty() -> Self {
+        Self(0)
+    }
+
+    #[must_use]
+    const fn table_next(next_table_phys: u64) -> Self {
+        Self(
+            (next_table_phys & PAGE_TABLE_ENTRY_ADDR_MASK)
+                | PAGE_TABLE_ENTRY_PRESENT
+                | PAGE_TABLE_ENTRY_WRITABLE,
+        )
+    }
+
+    #[must_use]
+    const fn huge_page_identity(frame_start: u64) -> Self {
+        Self(
+            (frame_start & PAGE_TABLE_ENTRY_ADDR_MASK)
+                | PAGE_TABLE_ENTRY_PRESENT
+                | PAGE_TABLE_ENTRY_WRITABLE
+                | PAGE_TABLE_ENTRY_HUGE_PAGE,
+        )
+    }
+}
+
+#[derive(Clone, Copy)]
+#[repr(C, align(4096))]
+struct PageTable {
+    entries: [PageTableEntry; ENTRIES_PER_PAGE_TABLE],
+}
+
+impl PageTable {
+    const fn empty() -> Self {
+        Self {
+            entries: [PageTableEntry::empty(); ENTRIES_PER_PAGE_TABLE],
+        }
+    }
+}
+
+static mut EARLY_PML4: PageTable = PageTable::empty();
+static mut EARLY_PDPT: PageTable = PageTable::empty();
+static mut EARLY_PD: PageTable = PageTable::empty();
 
 const EARLY_PHYSICAL_MEMORY_MAP: [PhysicalMemoryRegion; EARLY_MEMORY_REGION_COUNT] = [
     PhysicalMemoryRegion {
@@ -203,6 +280,69 @@ pub fn init_early_paging_plan(memory_report: PhysicalMemoryInitReport) -> EarlyP
         identity_map_start,
         identity_map_end_exclusive,
         identity_map_pages_4k: EARLY_IDENTITY_MAP_PAGES_4K,
+    }
+}
+
+/// Returns a deterministic snapshot of the materialized early paging tables.
+#[must_use]
+pub fn early_paging_table_snapshot() -> ([[u64; ENTRIES_PER_PAGE_TABLE]; 3], [u64; 3]) {
+    // SAFETY: these statics are only mutated during single-threaded early boot initialization;
+    // host tests read them after calling install_early_paging.
+    unsafe {
+        let root_addr = (&raw const EARLY_PML4) as u64;
+        let pdpt_addr = (&raw const EARLY_PDPT) as u64;
+        let pd_addr = (&raw const EARLY_PD) as u64;
+
+        let mut root = [0_u64; ENTRIES_PER_PAGE_TABLE];
+        let mut pdpt = [0_u64; ENTRIES_PER_PAGE_TABLE];
+        let mut pd = [0_u64; ENTRIES_PER_PAGE_TABLE];
+
+        let mut index = 0;
+        while index < ENTRIES_PER_PAGE_TABLE {
+            root[index] = EARLY_PML4.entries[index].0;
+            pdpt[index] = EARLY_PDPT.entries[index].0;
+            pd[index] = EARLY_PD.entries[index].0;
+            index += 1;
+        }
+
+        ([root, pdpt, pd], [root_addr, pdpt_addr, pd_addr])
+    }
+}
+
+/// Materializes minimal early paging structures and installs CR3 on real x86_64/UEFI boots.
+#[must_use]
+pub fn install_early_paging(plan: EarlyPagingPlanReport) -> EarlyPagingInstallReport {
+    let mapped_span_bytes = (plan.identity_map_pages_4k as u64) * PAGE_SIZE_2M_BYTES;
+    let root_table_phys_addr = plan.frame_window.start;
+    let pdpt_phys_addr = root_table_phys_addr + PAGE_SIZE_4K_BYTES;
+    let pd_phys_addr = pdpt_phys_addr + PAGE_SIZE_4K_BYTES;
+
+    // SAFETY: early boot initializes a fixed static table set before multitasking.
+    unsafe {
+        EARLY_PML4 = PageTable::empty();
+        EARLY_PDPT = PageTable::empty();
+        EARLY_PD = PageTable::empty();
+
+        EARLY_PML4.entries[0] = PageTableEntry::table_next(pdpt_phys_addr);
+        EARLY_PDPT.entries[0] = PageTableEntry::table_next(pd_phys_addr);
+
+        let mut index = 0;
+        while index < EARLY_IDENTITY_MAP_PAGES_4K {
+            let frame_start = (index as u64) * PAGE_SIZE_2M_BYTES;
+            EARLY_PD.entries[index] = PageTableEntry::huge_page_identity(frame_start);
+            index += 1;
+        }
+    }
+
+    let installed_into_cpu = maybe_install_cr3(root_table_phys_addr);
+
+    EarlyPagingInstallReport {
+        root_table_phys_addr,
+        pdpt_phys_addr,
+        pd_phys_addr,
+        mapped_span_bytes,
+        present_entry_count: EARLY_PAGING_PRESENT_ENTRY_COUNT,
+        installed_into_cpu,
     }
 }
 
@@ -526,6 +666,25 @@ fn maybe_load_early_idt(descriptor: &IdtDescriptor) {
 #[cfg(not(all(target_arch = "x86_64", target_os = "uefi")))]
 fn maybe_load_early_idt(_descriptor: &IdtDescriptor) {}
 
+#[cfg(all(target_arch = "x86_64", target_os = "uefi"))]
+fn maybe_install_cr3(root_table_phys_addr: u64) -> bool {
+    // SAFETY: early firmware boot intentionally installs a deterministic top-level page table
+    // root into CR3 before enabling higher-level kernel subsystems.
+    unsafe {
+        core::arch::asm!(
+            "mov cr3, rax",
+            in("rax") root_table_phys_addr,
+            options(nostack, preserves_flags)
+        );
+    }
+    true
+}
+
+#[cfg(not(all(target_arch = "x86_64", target_os = "uefi")))]
+fn maybe_install_cr3(_root_table_phys_addr: u64) -> bool {
+    false
+}
+
 #[cfg(test)]
 extern crate std;
 
@@ -533,13 +692,14 @@ extern crate std;
 mod tests {
     use super::{
         boot_banner_bytes, boot_banner_line_bytes, boot_entry_done_line_bytes,
-        boot_interrupt_init_line_bytes, boot_memory_init_line_bytes, boot_paging_plan_line_bytes,
-        boot_panic_line_bytes, dispatch_exception, early_idt_descriptor, early_idt_entries,
+        boot_interrupt_init_line_bytes, boot_memory_init_line_bytes,
+        boot_paging_install_line_bytes, boot_paging_plan_line_bytes, boot_panic_line_bytes,
+        dispatch_exception, early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
         early_physical_memory_map, exception_log_line, exception_log_line_bytes,
-        init_early_interrupts, init_early_paging_plan, init_early_physical_memory, IdtEntry,
-        PhysicalMemoryRegionKind, BOOT_BANNER, BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE,
-        BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE,
-        EXCEPTION_VECTOR_COUNT,
+        init_early_interrupts, init_early_paging_plan, init_early_physical_memory,
+        install_early_paging, IdtEntry, PhysicalMemoryRegionKind, BOOT_BANNER, BOOT_BANNER_LINE,
+        BOOT_ENTRY_DONE_LINE, BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE,
+        BOOT_PAGING_INSTALL_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -613,6 +773,18 @@ mod tests {
     }
 
     #[test]
+    fn boot_paging_install_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_PAGING_INSTALL_LINE,
+            "tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514\r\n"
+        );
+        assert_eq!(
+            boot_paging_install_line_bytes(),
+            b"tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514\r\n"
+        );
+    }
+
+    #[test]
     fn early_physical_memory_map_model_has_expected_regions() {
         let map = early_physical_memory_map();
         assert_eq!(map.len(), 5);
@@ -651,6 +823,33 @@ mod tests {
             0x0000_0000_0020_0000
         );
         assert_eq!(paging_plan.identity_map_pages_4k, 512);
+    }
+
+    #[test]
+    fn install_early_paging_materializes_root_pdpt_and_identity_2m_entries() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+        let install = install_early_paging(paging_plan);
+
+        assert_eq!(install.root_table_phys_addr, 0x0000_0000_3f7e_d000);
+        assert_eq!(install.pdpt_phys_addr, 0x0000_0000_3f7e_e000);
+        assert_eq!(install.pd_phys_addr, 0x0000_0000_3f7e_f000);
+        assert_eq!(install.mapped_span_bytes, 0x0000_0000_4000_0000);
+        assert_eq!(install.present_entry_count, 514);
+        assert!(!install.installed_into_cpu);
+
+        let (tables, _table_addrs) = early_paging_table_snapshot();
+        let root = &tables[0];
+        let pdpt = &tables[1];
+        let pd = &tables[2];
+
+        assert_eq!(root[0], 0x0000_0000_3f7e_e003);
+        assert_eq!(pdpt[0], 0x0000_0000_3f7e_f003);
+        assert_eq!(pd[0], 0x0000_0000_0000_0083);
+        assert_eq!(pd[1], 0x0000_0000_0020_0083);
+        assert_eq!(pd[511], 0x0000_0000_3fe0_0083);
+        assert_eq!(root[1], 0);
+        assert_eq!(pdpt[1], 0);
     }
 
     #[test]

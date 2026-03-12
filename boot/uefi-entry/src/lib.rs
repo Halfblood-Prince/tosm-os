@@ -267,6 +267,12 @@ pub const fn paging_plan_message_line() -> &'static [u8] {
     kernel::boot_paging_plan_line_bytes()
 }
 
+/// Returns the deterministic paging-install line expected after table materialization.
+#[must_use]
+pub const fn paging_install_message_line() -> &'static [u8] {
+    kernel::boot_paging_install_line_bytes()
+}
+
 /// Returns the deterministic exception line expected from early dispatch logging.
 #[must_use]
 pub fn exception_message_line(vector: u8) -> &'static [u8] {
@@ -296,9 +302,13 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
     serial.write_all(memory_init_message_line());
     screen.write_all(memory_init_message_line());
 
-    let _paging_plan = kernel::init_early_paging_plan(memory_report);
+    let paging_plan = kernel::init_early_paging_plan(memory_report);
     serial.write_all(paging_plan_message_line());
     screen.write_all(paging_plan_message_line());
+
+    let _paging_install_report = kernel::install_early_paging(paging_plan);
+    serial.write_all(paging_install_message_line());
+    screen.write_all(paging_install_message_line());
 
     serial.write_all(entry_done_message_line());
     screen.write_all(entry_done_message_line());
@@ -329,9 +339,10 @@ mod tests {
 
     use super::{
         entry_done_message_line, exception_message_line, interrupt_init_message_line,
-        kernel_entry_message_line, memory_init_message_line, paging_plan_message_line,
-        panic_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1,
-        LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
+        kernel_entry_message_line, memory_init_message_line, paging_install_message_line,
+        paging_plan_message_line, panic_message_line, vga_cell_index, EfiStatus,
+        BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY,
+        VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
     };
 
     struct VgaWriterModel {
@@ -464,6 +475,14 @@ mod tests {
     }
 
     #[test]
+    fn paging_install_message_line_matches_kernel_canonical_paging_install_line() {
+        assert_eq!(
+            paging_install_message_line(),
+            b"tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514\r\n"
+        );
+    }
+
+    #[test]
     fn efi_status_success_value_is_zero() {
         assert_eq!(EfiStatus::SUCCESS.0, 0);
     }
@@ -494,12 +513,14 @@ mod tests {
         let interrupt_columns = interrupt_init_message_line().len();
         let memory_columns = memory_init_message_line().len();
         let paging_plan_columns = paging_plan_message_line().len();
+        let paging_install_columns = paging_install_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
         assert!(panic_columns < VGA_TEXT_COLUMNS);
         assert!(interrupt_columns < VGA_TEXT_COLUMNS);
         assert!(memory_columns < VGA_TEXT_COLUMNS);
         assert!(paging_plan_columns < VGA_TEXT_COLUMNS);
+        assert!(paging_install_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
     }
 
@@ -533,9 +554,10 @@ mod tests {
         model.write_all(exception_message_line(14));
         model.write_all(memory_init_message_line());
         model.write_all(paging_plan_message_line());
+        model.write_all(paging_install_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 6);
+        assert_eq!(model.row, 7);
         assert_eq!(model.column, 0);
         assert_eq!(
             model.row_text_without_trailing_blanks(0),
@@ -559,10 +581,14 @@ mod tests {
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(5),
+            b"tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(6),
             b"tosm-os: efi_main completed"
         );
         assert_eq!(
-            model.row_bytes(6),
+            model.row_bytes(7),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
         );
     }
@@ -576,6 +602,7 @@ mod tests {
         model.write_all(exception_message_line(14));
         model.write_all(memory_init_message_line());
         model.write_all(paging_plan_message_line());
+        model.write_all(paging_install_message_line());
         model.write_all(entry_done_message_line());
 
         model.init_for_boot_logs();
@@ -606,6 +633,10 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: paging plan frames=4 window=0x3f7ed000-0x3f7f1000 map4k=512"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
