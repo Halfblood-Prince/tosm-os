@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: serial and screen output
-- Subtask: enforce canonical boot-screen transcript ordering contracts in smoke automation so CI checks row-ordering semantics in addition to literal message presence
-- Status: completed (smoke automation now executes targeted host tests that assert deterministic VGA boot and panic transcript ordering contracts before QEMU runtime checks)
+- Subtask: add smoke automation coverage for VGA transcript scrolling behavior so CI enforces deterministic last-row lifecycle semantics alongside boot/panic ordering contracts
+- Status: completed (smoke automation now executes targeted host tests that assert deterministic VGA boot/panic transcript ordering plus scrolling lifecycle contracts before QEMU runtime checks)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: extended `tools/smoke-test.sh` with a dedicated screen transcript contract phase that runs targeted `uefi-entry` model tests for boot-line ordering and panic-path reinitialization invariants, then reports an explicit VGA contract success marker.
-- Next slice: add smoke automation coverage for VGA transcript scrolling behavior so CI enforces deterministic last-row lifecycle semantics alongside boot/panic row-order guarantees.
+- Completed slice: extended `tools/smoke-test.sh` with an explicit transcript-test list that now includes the VGA scroll lifecycle model test, so smoke automation enforces deterministic last-row clear-and-scroll behavior in addition to boot/panic ordering checks.
+- Next slice: add smoke automation coverage for VGA initialization and newline-row clearing behavior so CI enforces deterministic first-frame and destination-row hygiene contracts alongside ordering/scrolling guarantees.
 
 <!-- ci-status:start -->
 ## Latest CI automation
