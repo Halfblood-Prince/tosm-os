@@ -8,11 +8,13 @@ expected_exception_page_fault='tosm-os: exception vector 14 page fault'
 expected_exception_unknown='tosm-os: exception vector unknown'
 expected_entry_done='tosm-os: efi_main completed'
 expected_memory_init='tosm-os: memory init usable=0x3f790000 reserved=0x00811000 regions=5'
+expected_paging_plan='tosm-os: paging plan frames=4 window=0x3f7ed000-0x3f7f1000 map4k=512'
 expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
 expected_interrupt_init_line='tosm-os: idt skeleton initialized\r\n'
 expected_entry_done_line='tosm-os: efi_main completed\r\n'
 expected_memory_init_line='tosm-os: memory init usable=0x3f790000 reserved=0x00811000 regions=5\r\n'
+expected_paging_plan_line='tosm-os: paging plan frames=4 window=0x3f7ed000-0x3f7f1000 map4k=512\r\n'
 expected_exception_page_fault_line='tosm-os: exception vector 14 page fault\r\n'
 
 contract_check() {
@@ -46,6 +48,11 @@ contract_check() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_paging_plan}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected paging-plan line not found"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_exception_page_fault}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected exception vector 14 line not found"
     exit 1
@@ -73,6 +80,11 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_memory_init_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected memory-init CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_paging_plan_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected paging-plan CRLF contract not found"
     exit 1
   fi
 
@@ -105,7 +117,7 @@ screen_transcript_contract_check() {
     cargo test --package uefi-entry --lib "${test_name}"
   done
 
-  echo "smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/memory-reporting/scrolling contracts present"
+  echo "smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/memory-reporting/paging-plan-reporting/scrolling contracts present"
 }
 
 find_ovmf_code() {
@@ -238,12 +250,17 @@ run_qemu_smoke() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_paging_plan}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing paging-plan line"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing completion line"
     exit 1
   fi
 
-  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, and completion lines"
+  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, and completion lines"
 }
 
 contract_check

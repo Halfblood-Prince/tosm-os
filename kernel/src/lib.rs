@@ -23,6 +23,10 @@ pub const BOOT_ENTRY_DONE_LINE: &str = "tosm-os: efi_main completed\r\n";
 pub const BOOT_MEMORY_INIT_LINE: &str =
     "tosm-os: memory init usable=0x3f790000 reserved=0x00811000 regions=5\r\n";
 
+/// Canonical paging-plan line emitted after deterministic early frame-window selection.
+pub const BOOT_PAGING_PLAN_LINE: &str =
+    "tosm-os: paging plan frames=4 window=0x3f7ed000-0x3f7f1000 map4k=512\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -59,6 +63,12 @@ pub const fn boot_memory_init_line_bytes() -> &'static [u8] {
     BOOT_MEMORY_INIT_LINE.as_bytes()
 }
 
+/// Returns the canonical paging-plan line (including CRLF) for serial transmitters.
+#[must_use]
+pub const fn boot_paging_plan_line_bytes() -> &'static [u8] {
+    BOOT_PAGING_PLAN_LINE.as_bytes()
+}
+
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
 pub const EARLY_MEMORY_REGION_COUNT: usize = 5;
 
@@ -85,6 +95,27 @@ pub struct PhysicalMemoryInitReport {
     pub reserved_bytes: u64,
     pub highest_usable_end_exclusive: u64,
 }
+
+/// Deterministic 4KiB frame window selected for early paging structure placement.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PageTableFrameWindow {
+    pub start: u64,
+    pub end_exclusive: u64,
+    pub frame_count: usize,
+}
+
+/// Deterministic early paging bootstrap report derived from physical-memory model output.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyPagingPlanReport {
+    pub frame_window: PageTableFrameWindow,
+    pub identity_map_start: u64,
+    pub identity_map_end_exclusive: u64,
+    pub identity_map_pages_4k: usize,
+}
+
+pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
+pub const EARLY_PAGING_FRAME_WINDOW_FRAMES: usize = 4;
+pub const EARLY_IDENTITY_MAP_PAGES_4K: usize = 512;
 
 const EARLY_PHYSICAL_MEMORY_MAP: [PhysicalMemoryRegion; EARLY_MEMORY_REGION_COUNT] = [
     PhysicalMemoryRegion {
@@ -151,6 +182,27 @@ pub fn init_early_physical_memory() -> PhysicalMemoryInitReport {
         usable_bytes,
         reserved_bytes,
         highest_usable_end_exclusive,
+    }
+}
+
+/// Initializes a deterministic paging bootstrap plan from the modeled memory report.
+#[must_use]
+pub fn init_early_paging_plan(memory_report: PhysicalMemoryInitReport) -> EarlyPagingPlanReport {
+    let frame_window_size = (EARLY_PAGING_FRAME_WINDOW_FRAMES as u64) * PAGE_SIZE_4K_BYTES;
+    let frame_window = PageTableFrameWindow {
+        start: memory_report.highest_usable_end_exclusive - frame_window_size,
+        end_exclusive: memory_report.highest_usable_end_exclusive,
+        frame_count: EARLY_PAGING_FRAME_WINDOW_FRAMES,
+    };
+
+    let identity_map_start = 0;
+    let identity_map_end_exclusive = (EARLY_IDENTITY_MAP_PAGES_4K as u64) * PAGE_SIZE_4K_BYTES;
+
+    EarlyPagingPlanReport {
+        frame_window,
+        identity_map_start,
+        identity_map_end_exclusive,
+        identity_map_pages_4k: EARLY_IDENTITY_MAP_PAGES_4K,
     }
 }
 
@@ -481,12 +533,13 @@ extern crate std;
 mod tests {
     use super::{
         boot_banner_bytes, boot_banner_line_bytes, boot_entry_done_line_bytes,
-        boot_interrupt_init_line_bytes, boot_memory_init_line_bytes, boot_panic_line_bytes,
-        dispatch_exception, early_idt_descriptor, early_idt_entries, early_physical_memory_map,
-        exception_log_line, exception_log_line_bytes, init_early_interrupts,
-        init_early_physical_memory, IdtEntry, PhysicalMemoryRegionKind, BOOT_BANNER,
-        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE,
-        BOOT_PANIC_LINE, EXCEPTION_VECTOR_COUNT,
+        boot_interrupt_init_line_bytes, boot_memory_init_line_bytes, boot_paging_plan_line_bytes,
+        boot_panic_line_bytes, dispatch_exception, early_idt_descriptor, early_idt_entries,
+        early_physical_memory_map, exception_log_line, exception_log_line_bytes,
+        init_early_interrupts, init_early_paging_plan, init_early_physical_memory, IdtEntry,
+        PhysicalMemoryRegionKind, BOOT_BANNER, BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE,
+        BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE,
+        EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -548,6 +601,18 @@ mod tests {
     }
 
     #[test]
+    fn boot_paging_plan_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_PAGING_PLAN_LINE,
+            "tosm-os: paging plan frames=4 window=0x3f7ed000-0x3f7f1000 map4k=512\r\n"
+        );
+        assert_eq!(
+            boot_paging_plan_line_bytes(),
+            b"tosm-os: paging plan frames=4 window=0x3f7ed000-0x3f7f1000 map4k=512\r\n"
+        );
+    }
+
+    #[test]
     fn early_physical_memory_map_model_has_expected_regions() {
         let map = early_physical_memory_map();
         assert_eq!(map.len(), 5);
@@ -567,6 +632,25 @@ mod tests {
         assert_eq!(report.usable_bytes, 0x0000_0000_3f79_0000);
         assert_eq!(report.reserved_bytes, 0x0000_0000_0081_1000);
         assert_eq!(report.highest_usable_end_exclusive, 0x0000_0000_3f7f_1000);
+    }
+
+    #[test]
+    fn init_early_paging_plan_selects_top_usable_frame_window_and_identity_map_contract() {
+        let memory_report = init_early_physical_memory();
+        let paging_plan = init_early_paging_plan(memory_report);
+
+        assert_eq!(paging_plan.frame_window.frame_count, 4);
+        assert_eq!(paging_plan.frame_window.start, 0x0000_0000_3f7e_d000);
+        assert_eq!(
+            paging_plan.frame_window.end_exclusive,
+            0x0000_0000_3f7f_1000
+        );
+        assert_eq!(paging_plan.identity_map_start, 0);
+        assert_eq!(
+            paging_plan.identity_map_end_exclusive,
+            0x0000_0000_0020_0000
+        );
+        assert_eq!(paging_plan.identity_map_pages_4k, 512);
     }
 
     #[test]
