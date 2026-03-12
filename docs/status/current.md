@@ -21,9 +21,9 @@
 <!-- ci-status:start -->
 ## Latest CI automation
 
-- Last CI conclusion: failure
-- Last CI run: `23000801057`
-- Last tested commit: `8253c809a4688d6e078e5d9368861ccbe7a1141a`
-- Recommended next action for Codex: fix the smallest concrete failure from the latest CI excerpts before adding new scope
+- Last CI conclusion: success
+- Last CI run: `23002811149`
+- Last tested commit: `c39e30fc5a36d31a272b17aa15b3aa61a4ef122a`
+- Recommended next action for Codex: continue the next unfinished milestone slice; do not redo already-green validation work
 - Detailed summary: `docs/status/latest-ci.md`
 <!-- ci-status:end -->
