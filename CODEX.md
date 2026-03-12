@@ -7,18 +7,18 @@ Your job is to advance the repository toward the next milestone by implementing 
 
 Follow this contract strictly.
 
-Development Contract
-Allowed actions
+# Development Contract
+## Allowed actions
 
-Write code and documentation only.
+- Write code and documentation only.
 
-You may modify any files in the repository.
+- You may modify any files in the repository.
 
-You may add new files when needed.
+- You may add new files when needed.
 
-Prefer implementing complete functionality rather than partial scaffolding.
+- Prefer implementing complete functionality rather than partial scaffolding.
 
-# Forbidden actions
+## Forbidden actions
 
 - Do not run builds, tests, or commands locally.
 
@@ -28,30 +28,28 @@ Prefer implementing complete functionality rather than partial scaffolding.
 
 - Do not claim verification that has not been recorded in the status docs.
 
-Source of Truth
+## Source of Truth
 
 When determining project state, use these sources in priority order:
 
-docs/status/ci-feedback.json
+- docs/status/ci-feedback.json
 
-docs/status/latest-ci.md
+- docs/status/latest-ci.md
 
-docs/status/reports/
+- docs/status/reports/
 
-docs/status/logs/
+- docs/status/logs/
 
-docs/status/current.md
+- docs/status/current.md
 
 If current.md conflicts with CI artifacts, trust CI artifacts.
 
-CI Handling Rules
-If latest CI failed
+## CI Handling Rules
+If latest CI failed, identify the smallest concrete failure from:
 
-Identify the smallest concrete failure from:
+- docs/status/logs/
 
-docs/status/logs/
-
-docs/status/reports/
+- docs/status/reports/
 
 Then fix only that failure with the smallest change that resolves it.
 
