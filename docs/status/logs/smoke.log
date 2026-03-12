@@ -1,7 +1,7 @@
 smoke: serial message contracts present
 [1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.27s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
 running 1 test
@@ -65,5 +65,5 @@ smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-order
 ERROR:system/cpus.c:504:qemu_mutex_lock_iothread_impl: assertion failed: (!qemu_mutex_iothread_locked())
 Bail out! ERROR:system/cpus.c:504:qemu_mutex_lock_iothread_impl: assertion failed: (!qemu_mutex_iothread_locked())
 timeout: the monitored command dumped core
-./tools/smoke-test.sh: line 187:  4170 Aborted                 timeout 20s "${qemu_bin}" -nodefaults -nographic -serial file:"${serial_log}" -drive if=pflash,format=raw,readonly=on,file="${ovmf_code}" -drive if=pflash,format=raw,file="${ovmf_vars_runtime}" -drive format=raw,file=fat:rw:"${SMOKE_RUN_DIR}"
-smoke: QEMU serial output missing paging-install line
+./tools/smoke-test.sh: line 187:  4181 Aborted                 timeout 20s "${qemu_bin}" -nodefaults -nographic "${qemu_accel_args[@]}" -serial file:"${serial_log}" -drive if=pflash,format=raw,readonly=on,file="${ovmf_code}" -drive if=pflash,format=raw,file="${ovmf_vars_runtime}" -drive format=raw,file=fat:rw:"${SMOKE_RUN_DIR}"
+smoke: QEMU execution failed with status 134
