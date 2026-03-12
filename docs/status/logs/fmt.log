@@ -1,1 +1,10 @@
-
+Diff in /home/runner/work/tosm-os/tosm-os/boot/uefi-entry/src/lib.rs:233:
+ #[cfg(test)]
+ mod tests {
+     use super::{
+-        entry_done_message_line, kernel_entry_message_line, panic_message_line, EfiStatus,
+-        vga_cell_index, BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB,
++        entry_done_message_line, kernel_entry_message_line, panic_message_line, vga_cell_index,
++        EfiStatus, BAUD_DIVISOR_38400, LINE_CONTROL_8N1, LINE_CONTROL_DLAB,
+         LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
+     };
