@@ -170,7 +170,8 @@ Rust validation flow:
 cargo fmt --all
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all --verbose
-cargo build --workspace --verbose```
+cargo build --workspace --verbose
+```
 
 If this repo uses a different command set, use the repo’s actual commands.
 
@@ -182,7 +183,7 @@ If QEMU smoke testing exists, use it when practical.
 
 Do not claim success without checking whether the code still builds.
 
-Failure handling
+## Failure handling
 
 If validation fails:
 
