@@ -1,8 +1,8 @@
 # Current milestone
 
 - Active milestone: bootloader and entry
-- Subtask: add a UEFI application target and opportunistic QEMU smoke execution over serial output
-- Status: in_progress (implemented `bootx64` UEFI target and smoke script now runs QEMU when firmware tooling exists)
+- Subtask: make the `bootx64` UEFI binary target host-check friendly so workspace CI jobs can compile/test/clippy without pulling UEFI panic semantics into host `std` test builds
+- Status: in_progress (implemented target-gated UEFI entry attributes and symbol export, with a host-only shim `main` for non-UEFI checks)
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
 ## Done criteria
@@ -15,8 +15,8 @@
 
 ## Progress update
 
-- Completed slice: UEFI binary target (`bootx64`) is now defined for `x86_64-unknown-uefi`, and smoke now does both source-level contract checks and runtime serial validation in QEMU when `qemu-system-x86_64` + OVMF are available.
-- Next slice: make QEMU smoke mandatory in CI by provisioning deterministic OVMF firmware paths and enforcing runtime execution instead of fallback mode.
+- Completed slice: fixed the smallest concrete CI blocker by gating `boot/uefi-entry/src/main.rs` to UEFI-only `no_std`/`no_main` + `efi_main`, while providing a host-only `main()` shim so host-target `clippy`, `test`, and `build` no longer compile the UEFI panic runtime as a `std` test binary.
+- Next slice: rerun CI and, if green on host checks, continue the milestone plan to make QEMU smoke mandatory with deterministic OVMF provisioning in CI.
 
 <!-- ci-status:start -->
 ## Latest CI automation
