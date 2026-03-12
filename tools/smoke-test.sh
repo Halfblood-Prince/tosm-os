@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Boot milestone placeholder smoke gate.
-# This script intentionally checks for the deterministic boot banner contract
-# until the QEMU boot path is added in a later slice.
 expected_banner='tosm-os: kernel entry reached'
 expected_panic='tosm-os: panic in uefi-entry'
 expected_entry_done='tosm-os: efi_main completed'
@@ -11,34 +8,125 @@ expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
 expected_entry_done_line='tosm-os: efi_main completed\r\n'
 
-if ! grep --fixed-strings --quiet -- "${expected_banner}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
-  echo "smoke: expected boot banner not found"
-  exit 1
-fi
+contract_check() {
+  if ! grep --fixed-strings --quiet -- "${expected_banner}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected boot banner not found"
+    exit 1
+  fi
 
-if ! grep --fixed-strings --quiet -- "${expected_entry_done}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
-  echo "smoke: expected efi_main completion line not found"
-  exit 1
-fi
+  if ! grep --fixed-strings --quiet -- "${expected_entry_done}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected efi_main completion line not found"
+    exit 1
+  fi
 
-if ! grep --fixed-strings --quiet -- "${expected_panic}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
-  echo "smoke: expected panic line not found"
-  exit 1
-fi
+  if ! grep --fixed-strings --quiet -- "${expected_panic}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected panic line not found"
+    exit 1
+  fi
 
-if ! grep --fixed-strings --quiet -- "${expected_banner_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
-  echo "smoke: expected boot banner CRLF contract not found"
-  exit 1
-fi
+  if ! grep --fixed-strings --quiet -- "${expected_banner_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected boot banner CRLF contract not found"
+    exit 1
+  fi
 
-if ! grep --fixed-strings --quiet -- "${expected_panic_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
-  echo "smoke: expected panic CRLF contract not found"
-  exit 1
-fi
+  if ! grep --fixed-strings --quiet -- "${expected_panic_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected panic CRLF contract not found"
+    exit 1
+  fi
 
-if ! grep --fixed-strings --quiet -- "${expected_entry_done_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
-  echo "smoke: expected efi_main completion CRLF contract not found"
-  exit 1
-fi
+  if ! grep --fixed-strings --quiet -- "${expected_entry_done_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected efi_main completion CRLF contract not found"
+    exit 1
+  fi
 
-echo "smoke: boot banner, panic, completion, and CRLF contracts present"
+  echo "smoke: serial message contracts present"
+}
+
+find_ovmf_code() {
+  local candidate
+  for candidate in \
+    "${OVMF_CODE_PATH:-}" \
+    /usr/share/OVMF/OVMF_CODE.fd \
+    /usr/share/ovmf/OVMF.fd \
+    /usr/share/edk2/x64/OVMF_CODE.fd; do
+    if [[ -n "${candidate}" && -f "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+find_ovmf_vars() {
+  local candidate
+  for candidate in \
+    "${OVMF_VARS_PATH:-}" \
+    /usr/share/OVMF/OVMF_VARS.fd \
+    /usr/share/edk2/x64/OVMF_VARS.fd; do
+    if [[ -n "${candidate}" && -f "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_qemu_smoke() {
+  local qemu_bin="${QEMU_BIN:-qemu-system-x86_64}"
+  if ! command -v "${qemu_bin}" >/dev/null 2>&1; then
+    echo "smoke: ${qemu_bin} unavailable, skipping QEMU execution"
+    return 2
+  fi
+
+  local ovmf_code ovmf_vars
+  if ! ovmf_code="$(find_ovmf_code)"; then
+    echo "smoke: OVMF code firmware unavailable, skipping QEMU execution"
+    return 2
+  fi
+  if ! ovmf_vars="$(find_ovmf_vars)"; then
+    echo "smoke: OVMF vars firmware unavailable, skipping QEMU execution"
+    return 2
+  fi
+
+  cargo build --package uefi-entry --bin bootx64 --target x86_64-unknown-uefi
+
+  local efi_path="target/x86_64-unknown-uefi/debug/bootx64.efi"
+  if [[ ! -f "${efi_path}" ]]; then
+    echo "smoke: expected EFI image missing at ${efi_path}"
+    exit 1
+  fi
+
+  local run_dir
+  run_dir="$(mktemp -d)"
+  trap 'rm -rf "${run_dir}"' EXIT
+  mkdir -p "${run_dir}/EFI/BOOT"
+  cp "${efi_path}" "${run_dir}/EFI/BOOT/BOOTX64.EFI"
+
+  local serial_log="${run_dir}/serial.log"
+  timeout 20s "${qemu_bin}" \
+    -nodefaults \
+    -nographic \
+    -serial file:"${serial_log}" \
+    -drive if=pflash,format=raw,readonly=on,file="${ovmf_code}" \
+    -drive if=pflash,format=raw,file="${ovmf_vars}" \
+    -drive format=raw,file=fat:rw:"${run_dir}"
+
+  if ! grep --fixed-strings --quiet -- "${expected_banner}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing banner"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing completion line"
+    exit 1
+  fi
+
+  echo "smoke: QEMU boot output includes banner and completion line"
+}
+
+contract_check
+qemu_status=0
+run_qemu_smoke || qemu_status=$?
+if [[ "${qemu_status}" -ne 0 && "${qemu_status}" -ne 2 ]]; then
+  exit "${qemu_status}"
+fi
