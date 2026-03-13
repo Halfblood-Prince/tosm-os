@@ -363,6 +363,18 @@ pub const fn thread_context_meta_message_line() -> &'static [u8] {
     kernel::boot_thread_context_meta_line_bytes()
 }
 
+/// Returns deterministic thread-state blocked line expected for lifecycle modeling.
+#[must_use]
+pub const fn thread_state_blocked_message_line() -> &'static [u8] {
+    kernel::boot_thread_state_blocked_line_bytes()
+}
+
+/// Returns deterministic thread-state ready line expected for lifecycle modeling.
+#[must_use]
+pub const fn thread_state_ready_message_line() -> &'static [u8] {
+    kernel::boot_thread_state_ready_line_bytes()
+}
+
 /// Returns the deterministic exception line expected from early dispatch logging.
 #[must_use]
 pub fn exception_message_line(vector: u8) -> &'static [u8] {
@@ -470,6 +482,20 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         screen.write_all(thread_context_meta_message_line());
     }
 
+    if kernel::transition_early_thread_lifecycle(2, kernel::EarlyThreadLifecycleState::Blocked)
+        .is_ok()
+    {
+        serial.write_all(thread_state_blocked_message_line());
+        screen.write_all(thread_state_blocked_message_line());
+    }
+
+    if kernel::transition_early_thread_lifecycle(2, kernel::EarlyThreadLifecycleState::Ready)
+        .is_ok()
+    {
+        serial.write_all(thread_state_ready_message_line());
+        screen.write_all(thread_state_ready_message_line());
+    }
+
     if kernel::dequeue_early_scheduler_task(2).is_ok() {
         serial.write_all(thread_dequeue_message_line());
         screen.write_all(thread_dequeue_message_line());
@@ -509,7 +535,8 @@ mod tests {
         memory_init_message_line, paging_install_message_line, paging_plan_message_line,
         panic_message_line, scheduler_handoff_message_line, thread_context_meta_message_line,
         thread_context_restore_message_line, thread_context_save_message_line,
-        thread_dequeue_message_line, thread_enqueue_message_line, timer_ack_message_line,
+        thread_dequeue_message_line, thread_enqueue_message_line,
+        thread_state_blocked_message_line, thread_state_ready_message_line, timer_ack_message_line,
         timer_first_tick_message_line, timer_handoff_message_line, timer_init_message_line,
         timer_third_tick_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400,
         LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
@@ -807,6 +834,8 @@ mod tests {
         let thread_enqueue_columns = thread_enqueue_message_line().len();
         let thread_context_save_columns = thread_context_save_message_line().len();
         let thread_context_restore_columns = thread_context_restore_message_line().len();
+        let thread_state_blocked_columns = thread_state_blocked_message_line().len();
+        let thread_state_ready_columns = thread_state_ready_message_line().len();
         let thread_dequeue_columns = thread_dequeue_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
@@ -825,6 +854,8 @@ mod tests {
         assert!(thread_enqueue_columns < VGA_TEXT_COLUMNS);
         assert!(thread_context_save_columns < VGA_TEXT_COLUMNS);
         assert!(thread_context_restore_columns < VGA_TEXT_COLUMNS);
+        assert!(thread_state_blocked_columns < VGA_TEXT_COLUMNS);
+        assert!(thread_state_ready_columns < VGA_TEXT_COLUMNS);
         assert!(thread_dequeue_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
     }
@@ -874,10 +905,12 @@ mod tests {
         model.write_all(thread_context_save_message_line());
         model.write_all(thread_context_restore_message_line());
         model.write_all(thread_context_meta_message_line());
+        model.write_all(thread_state_blocked_message_line());
+        model.write_all(thread_state_ready_message_line());
         model.write_all(thread_dequeue_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 22);
+        assert_eq!(model.row, 24);
         assert_eq!(model.column, 0);
         assert_eq!(
             model.row_text_without_trailing_blanks(0),
@@ -961,14 +994,22 @@ mod tests {
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(20),
-            b"tosm-os: thread dequeue task=2 runq=2 selected=1"
+            b"tosm-os: thread state task=2 ready->blocked runq=2 selected=1"
         );
         assert_eq!(
             model.row_text_without_trailing_blanks(21),
+            b"tosm-os: thread state task=2 blocked->ready runq=3 selected=1"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(22),
+            b"tosm-os: thread dequeue task=2 runq=2 selected=1"
+        );
+        assert_eq!(
+            model.row_text_without_trailing_blanks(23),
             b"tosm-os: efi_main completed"
         );
         assert_eq!(
-            model.row_bytes(22),
+            model.row_bytes(24),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
         );
     }
@@ -995,6 +1036,8 @@ mod tests {
         model.write_all(thread_context_save_message_line());
         model.write_all(thread_context_restore_message_line());
         model.write_all(thread_context_meta_message_line());
+        model.write_all(thread_state_blocked_message_line());
+        model.write_all(thread_state_ready_message_line());
         model.write_all(thread_dequeue_message_line());
         model.write_all(entry_done_message_line());
 
@@ -1078,6 +1121,14 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: thread ctx restore to=2 rip=0x200000 rsp=0x402000"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: thread state task=2 ready->blocked runq=2 selected=1"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: thread state task=2 blocked->ready runq=3 selected=1"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),

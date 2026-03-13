@@ -43,7 +43,8 @@
 - Completed slice: added deterministic scheduler slot mutation APIs (`enqueue_early_scheduler_task` / `dequeue_early_scheduler_task`) plus runnable-slot round-robin advancement, then integrated canonical thread enqueue/dequeue transcript contracts across kernel, UEFI boot flow, and smoke checks.
 - Completed slice: introduced deterministic per-thread context handoff modeling (save/restore register snapshots), integrated canonical thread-context transcript lines across kernel + UEFI boot flow, and extended tests/smoke contracts to cover the new handoff output.
 - Completed slice: extended thread context handoff reports with deterministic metadata (reason, timer tick, run-queue depth, queue watermark), added canonical thread-ctx-meta transcript contracts, and integrated those checks across kernel/UEFI tests plus smoke/QEMU serial validations.
-- Next slice: model per-thread lifecycle state transitions (ready/running/blocked/terminated) and integrate them into scheduler handoff contracts.
+- Completed slice: added deterministic per-thread lifecycle transition modeling (ready/running/blocked/terminated) wired into scheduler runnable-state bookkeeping, then integrated canonical blocked/ready transcript contracts across kernel, UEFI flow, and smoke checks.
+- Next slice: model termination cleanup semantics and expose deterministic scheduler error/report contracts for blocked/terminated selection edge cases.
 
 <!-- ci-status:start -->
 ## Latest CI automation
