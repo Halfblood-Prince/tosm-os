@@ -1,14 +1,14 @@
 # Latest CI feedback
 
 - Workflow: CI
-- Conclusion: success
+- Conclusion: failure
 - Branch: main
-- Commit: `3eed4a34c1224f0e76f093fbd357bf6f8eef7ff5`
-- Run ID: 23026206859
+- Commit: `b39ee9461e1ce5e6afdaa3b731b6e4135b56fdcd`
+- Run ID: 23054848557
 - Run attempt: 1
 - Event: push
-- Updated at: 2026-03-12T22:09:39Z
-- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23026206859
+- Updated at: 2026-03-13T14:16:25Z
+- Run URL: https://github.com/Halfblood-Prince/tosm-os/actions/runs/23054848557
 
 ## Job results
 
@@ -16,13 +16,13 @@
 - Clippy: success
 - Tests: success
 - Build: success
-- Smoke: success
+- Smoke: failure
 
 ## Codex handoff
 
 Codex should read `docs/status/ci-feedback.json`, the reports under `docs/status/reports/`, and the excerpts under `docs/status/logs/` before writing more code.
 
-Recommended next action: **continue the next unfinished milestone slice; do not redo already-green validation work**.
+Recommended next action: **fix the smallest concrete failure from the latest CI excerpts before adding new scope**.
 
 ## Failure excerpt summary
 
@@ -33,7 +33,7 @@ Recommended next action: **continue the next unfinished milestone slice; do not 
 - `tests`: [1m[92m     Running[0m `/home/runner/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name bootx64 --edition=2021 boot/uefi-entry/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=f8ed4a52099efd2f -C extra-filename=-60f3d71e13d89e2f --out-dir /home/runner/work/tosm-os/tosm-os/target/debug/deps -L dependency=/home/runner/work/tosm-os/tosm-os/target/debug/deps --extern kernel=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libkernel-9e1bdf8d8c0d7a05.rlib --extern uefi_entry=/home/runner/work/tosm-os/tosm-os/target/debug/deps/libuefi_entry-672de0481a9d44c1.rlib`
 - `tests`: test tests::boot_panic_line_bytes_include_crlf ... ok
 - `tests`: test tests::early_heap_bootstrap_propagates_frame_allocator_errors ... ok
-- `tests`: test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+- `tests`: test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 - `tests`: test tests::model_panic_line_renders_on_first_row_after_init ... ok
 - `tests`: test tests::model_panic_transcript_reinitializes_screen_and_removes_old_boot_lines ... ok
 - `tests`: test tests::panic_message_line_matches_kernel_canonical_panic_line ... ok

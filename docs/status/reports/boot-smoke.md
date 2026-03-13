@@ -1,3 +1,3 @@
 # Boot smoke report
 
-- Smoke test: success
+- Smoke test: failure

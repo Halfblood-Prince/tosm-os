@@ -1,7 +1,7 @@
 smoke: serial message contracts present
 [1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.40s
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 33.44s
 [1m[92m     Running[0m unittests src/lib.rs (target/debug/deps/uefi_entry-df6ca0fed293499f)
 
 running 1 test
@@ -57,10 +57,10 @@ test tests::model_scroll_moves_rows_up_and_clears_last_row ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 33 filtered out; finished in 0.00s
 
-smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/memory-reporting/paging-plan-reporting/timer-reporting/scheduler-thread-reporting/context-handoff-reporting/scrolling contracts present
+smoke: VGA transcript init/newline/carriage-return/wrap/ordering/interrupt-ordering/memory-reporting/paging-plan-reporting/timer-reporting/scheduler-thread-reporting/context-handoff-reporting/lifecycle-reporting/scrolling contracts present
 [1m[92m   Compiling[0m kernel v0.1.0 (/home/runner/work/tosm-os/tosm-os/kernel)
 [1m[92m   Compiling[0m uefi-entry v0.1.0 (/home/runner/work/tosm-os/tosm-os/boot/uefi-entry)
-[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.27s
-qemu-system-x86_64: terminating on signal 15 from pid 4197 (timeout)
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 3.05s
+qemu-system-x86_64: terminating on signal 15 from pid 4215 (timeout)
 smoke: QEMU timed out after 45s
-smoke: QEMU exited with status 124 after producing complete serial transcript
+smoke: QEMU serial output missing thread-dequeue line
