@@ -110,6 +110,14 @@ pub const BOOT_THREAD_WAIT_OWNERSHIP_LINE: &str =
 pub const BOOT_THREAD_WAKE_TIMEOUT_LINE: &str =
     "tosm-os: thread wake timeout task=2 deadline=3 now=3 expired=1\r\n";
 
+/// Canonical contention line emitted when wait-channel wake arbitration selects a winner.
+pub const BOOT_THREAD_WAIT_CONTENTION_LINE: &str =
+    "tosm-os: thread wait contend wait=0x3000 winner=3 loser=2 pri=signal>timer\r\n";
+
+/// Canonical wake-order line emitted for deterministic first/second wake ordering metadata.
+pub const BOOT_THREAD_WAKE_ORDER_LINE: &str =
+    "tosm-os: thread wake order first=3 second=2 wait=0x3000 claims=2,3\r\n";
+
 /// Canonical thread-state-terminated line emitted when a worker lifecycle is cleaned up.
 pub const BOOT_THREAD_STATE_TERMINATED_LINE: &str =
     "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n";
@@ -288,6 +296,18 @@ pub const fn boot_thread_wait_ownership_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_thread_wake_timeout_line_bytes() -> &'static [u8] {
     BOOT_THREAD_WAKE_TIMEOUT_LINE.as_bytes()
+}
+
+/// Returns the canonical thread wait-contention line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_wait_contention_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_WAIT_CONTENTION_LINE.as_bytes()
+}
+
+/// Returns the canonical thread wake-order line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_wake_order_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_WAKE_ORDER_LINE.as_bytes()
 }
 
 /// Returns the canonical thread-state-terminated line (including CRLF) for serial writers.
@@ -615,6 +635,16 @@ pub enum EarlyThreadWakeReason {
     Io,
 }
 
+impl EarlyThreadWakeReason {
+    const fn priority(self) -> u8 {
+        match self {
+            Self::Signal => 3,
+            Self::Io => 2,
+            Self::Timer => 1,
+        }
+    }
+}
+
 const fn deterministic_wait_owner_task_id(wait_channel: u64) -> u32 {
     match wait_channel {
         0x0000_0000_0000_2000 => EARLY_BOOTSTRAP_TASK_ID,
@@ -673,6 +703,18 @@ pub struct EarlyThreadWakeTimeout {
     pub expired: bool,
 }
 
+/// Deterministic wake-contestion report for wait-channel arbitration ordering contracts.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyThreadWakeContentionReport {
+    pub wait_channel: u64,
+    pub winner_task_id: u32,
+    pub loser_task_id: u32,
+    pub winner_reason: EarlyThreadWakeReason,
+    pub loser_reason: EarlyThreadWakeReason,
+    pub winner_claim_sequence: u64,
+    pub loser_claim_sequence: u64,
+}
+
 /// Errors returned by deterministic thread lifecycle transition helpers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EarlyThreadLifecycleError {
@@ -686,6 +728,14 @@ pub enum EarlyThreadLifecycleError {
 pub enum EarlyThreadContextHandoffError {
     SelectedTaskMissing,
     TargetTaskNotRunnable,
+}
+
+/// Errors returned by deterministic wait-channel contention arbitration helpers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyThreadWakeContentionError {
+    TaskNotFound,
+    TaskStateNotBlocked,
+    DuplicateTask,
 }
 
 /// Errors returned by deterministic scheduler slot-mutation helpers.
@@ -1830,6 +1880,82 @@ pub fn wake_early_thread(
     })
 }
 
+/// Resolves deterministic wake contention by prioritizing reason and claim-sequence order.
+pub fn resolve_early_thread_wake_contention(
+    wait_channel: u64,
+    first_task_id: u32,
+    first_reason: EarlyThreadWakeReason,
+    second_task_id: u32,
+    second_reason: EarlyThreadWakeReason,
+) -> Result<EarlyThreadWakeContentionReport, EarlyThreadWakeContentionError> {
+    if first_task_id == second_task_id {
+        return Err(EarlyThreadWakeContentionError::DuplicateTask);
+    }
+
+    let Some(first_slot) = scheduler_state_index_for_task(first_task_id) else {
+        return Err(EarlyThreadWakeContentionError::TaskNotFound);
+    };
+    let Some(second_slot) = scheduler_state_index_for_task(second_task_id) else {
+        return Err(EarlyThreadWakeContentionError::TaskNotFound);
+    };
+
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    unsafe {
+        if EARLY_THREAD_LIFECYCLE_STATES[first_slot] != EarlyThreadLifecycleState::Blocked
+            || EARLY_THREAD_LIFECYCLE_STATES[second_slot] != EarlyThreadLifecycleState::Blocked
+        {
+            return Err(EarlyThreadWakeContentionError::TaskStateNotBlocked);
+        }
+    }
+
+    let first_ownership = sample_wait_channel_ownership(first_task_id, wait_channel);
+    let second_ownership = sample_wait_channel_ownership(second_task_id, wait_channel);
+
+    let first_priority = first_reason.priority();
+    let second_priority = second_reason.priority();
+
+    let first_wins = first_priority > second_priority
+        || (first_priority == second_priority
+            && first_ownership.claim_sequence <= second_ownership.claim_sequence);
+
+    let (
+        winner_task_id,
+        winner_reason,
+        winner_claim_sequence,
+        loser_task_id,
+        loser_reason,
+        loser_claim_sequence,
+    ) = if first_wins {
+        (
+            first_task_id,
+            first_reason,
+            first_ownership.claim_sequence,
+            second_task_id,
+            second_reason,
+            second_ownership.claim_sequence,
+        )
+    } else {
+        (
+            second_task_id,
+            second_reason,
+            second_ownership.claim_sequence,
+            first_task_id,
+            first_reason,
+            first_ownership.claim_sequence,
+        )
+    };
+
+    Ok(EarlyThreadWakeContentionReport {
+        wait_channel,
+        winner_task_id,
+        loser_task_id,
+        winner_reason,
+        loser_reason,
+        winner_claim_sequence,
+        loser_claim_sequence,
+    })
+}
+
 /// Advances deterministic scheduler selection using timer handoff delta and returns combined state.
 #[must_use]
 pub fn take_early_scheduler_timer_handoff(
@@ -2306,7 +2432,8 @@ mod tests {
         boot_thread_context_save_line_bytes, boot_thread_dequeue_line_bytes,
         boot_thread_enqueue_line_bytes, boot_thread_state_blocked_line_bytes,
         boot_thread_state_ready_line_bytes, boot_thread_state_terminated_line_bytes,
-        boot_thread_wait_ownership_line_bytes, boot_thread_wake_line_bytes,
+        boot_thread_wait_contention_line_bytes, boot_thread_wait_ownership_line_bytes,
+        boot_thread_wake_line_bytes, boot_thread_wake_order_line_bytes,
         boot_thread_wake_timeout_line_bytes, boot_timer_ack_line_bytes,
         boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
         boot_timer_init_line_bytes, boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
@@ -2319,22 +2446,23 @@ mod tests {
         model_early_scheduler_blocked_selection_edge_case,
         model_early_scheduler_terminated_cleanup_edge_case, model_early_thread_context_handoff,
         record_early_timer_tick, reset_early_scheduler_state, reset_early_timer_ticks,
-        run_early_global_allocator_probe, run_early_heap_alloc_cycle, sample_early_timer_handoff,
-        take_early_scheduler_timer_handoff, take_early_timer_handoff,
-        transition_early_thread_lifecycle, translate_early_virtual_to_physical, wake_early_thread,
-        EarlyFrameAllocationError, EarlyFrameAllocator, EarlyHeapAllocationError,
-        EarlyHeapAllocator, EarlyHeapBootstrapError, EarlyHeapDeallocationError,
-        EarlyHeapOperationError, EarlyThreadLifecycleState, GlobalAllocatorInitError, IdtEntry,
-        PhysicalMemoryRegionKind, VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER,
-        BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE,
-        BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
-        BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
-        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_SCHEDULER_EDGE_BLOCKED_LINE,
-        BOOT_SCHEDULER_EDGE_TERMINATED_LINE, BOOT_SCHEDULER_HANDOFF_LINE,
-        BOOT_THREAD_CONTEXT_META_LINE, BOOT_THREAD_CONTEXT_RESTORE_LINE,
-        BOOT_THREAD_CONTEXT_SAVE_LINE, BOOT_THREAD_DEQUEUE_LINE, BOOT_THREAD_ENQUEUE_LINE,
-        BOOT_THREAD_STATE_BLOCKED_LINE, BOOT_THREAD_STATE_READY_LINE,
-        BOOT_THREAD_STATE_TERMINATED_LINE, BOOT_THREAD_WAIT_OWNERSHIP_LINE, BOOT_THREAD_WAKE_LINE,
+        resolve_early_thread_wake_contention, run_early_global_allocator_probe,
+        run_early_heap_alloc_cycle, sample_early_timer_handoff, take_early_scheduler_timer_handoff,
+        take_early_timer_handoff, transition_early_thread_lifecycle,
+        translate_early_virtual_to_physical, wake_early_thread, EarlyFrameAllocationError,
+        EarlyFrameAllocator, EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
+        EarlyHeapDeallocationError, EarlyHeapOperationError, EarlyThreadLifecycleState,
+        GlobalAllocatorInitError, IdtEntry, PhysicalMemoryRegionKind, VirtualAddress,
+        VirtualAddressTranslationError, BOOT_BANNER, BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE,
+        BOOT_GLOBAL_ALLOCATOR_PROBE_LINE, BOOT_GLOBAL_ALLOCATOR_READY_LINE,
+        BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE, BOOT_INTERRUPT_INIT_LINE,
+        BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE, BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE,
+        BOOT_SCHEDULER_EDGE_BLOCKED_LINE, BOOT_SCHEDULER_EDGE_TERMINATED_LINE,
+        BOOT_SCHEDULER_HANDOFF_LINE, BOOT_THREAD_CONTEXT_META_LINE,
+        BOOT_THREAD_CONTEXT_RESTORE_LINE, BOOT_THREAD_CONTEXT_SAVE_LINE, BOOT_THREAD_DEQUEUE_LINE,
+        BOOT_THREAD_ENQUEUE_LINE, BOOT_THREAD_STATE_BLOCKED_LINE, BOOT_THREAD_STATE_READY_LINE,
+        BOOT_THREAD_STATE_TERMINATED_LINE, BOOT_THREAD_WAIT_CONTENTION_LINE,
+        BOOT_THREAD_WAIT_OWNERSHIP_LINE, BOOT_THREAD_WAKE_LINE, BOOT_THREAD_WAKE_ORDER_LINE,
         BOOT_THREAD_WAKE_TIMEOUT_LINE, BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE,
         BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE,
         EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
@@ -3366,6 +3494,65 @@ mod tests {
     }
 
     #[test]
+    fn wake_contention_prefers_higher_priority_reason() {
+        reset_early_scheduler_state();
+        enqueue_early_scheduler_task(2).expect("enqueue should add first worker task");
+        enqueue_early_scheduler_task(3).expect("enqueue should add second worker task");
+
+        transition_early_thread_lifecycle(2, EarlyThreadLifecycleState::Blocked)
+            .expect("worker two should transition to blocked");
+        transition_early_thread_lifecycle(3, EarlyThreadLifecycleState::Blocked)
+            .expect("worker three should transition to blocked");
+
+        let contention = resolve_early_thread_wake_contention(
+            0x0000_0000_0000_3000,
+            2,
+            super::EarlyThreadWakeReason::Timer,
+            3,
+            super::EarlyThreadWakeReason::Signal,
+        )
+        .expect("contention resolution should succeed for blocked tasks");
+
+        assert_eq!(contention.wait_channel, 0x0000_0000_0000_3000);
+        assert_eq!(contention.winner_task_id, 3);
+        assert_eq!(contention.loser_task_id, 2);
+        assert_eq!(
+            contention.winner_reason,
+            super::EarlyThreadWakeReason::Signal
+        );
+        assert_eq!(contention.loser_reason, super::EarlyThreadWakeReason::Timer);
+        assert_eq!(contention.winner_claim_sequence, 2);
+        assert_eq!(contention.loser_claim_sequence, 1);
+
+        reset_early_scheduler_state();
+    }
+
+    #[test]
+    fn wake_contention_rejects_non_blocked_participants() {
+        reset_early_scheduler_state();
+        enqueue_early_scheduler_task(2).expect("enqueue should add first worker task");
+        enqueue_early_scheduler_task(3).expect("enqueue should add second worker task");
+
+        transition_early_thread_lifecycle(2, EarlyThreadLifecycleState::Blocked)
+            .expect("worker two should transition to blocked");
+
+        let err = resolve_early_thread_wake_contention(
+            0x0000_0000_0000_3000,
+            2,
+            super::EarlyThreadWakeReason::Timer,
+            3,
+            super::EarlyThreadWakeReason::Signal,
+        )
+        .expect_err("contention should fail unless all participants are blocked");
+        assert_eq!(
+            err,
+            super::EarlyThreadWakeContentionError::TaskStateNotBlocked
+        );
+
+        reset_early_scheduler_state();
+    }
+
+    #[test]
     fn wake_timeout_and_wait_owner_lines_include_crlf() {
         assert_eq!(
             BOOT_THREAD_WAIT_OWNERSHIP_LINE,
@@ -3382,6 +3569,22 @@ mod tests {
         assert_eq!(
             boot_thread_wake_timeout_line_bytes(),
             b"tosm-os: thread wake timeout task=2 deadline=3 now=3 expired=1\r\n"
+        );
+        assert_eq!(
+            BOOT_THREAD_WAIT_CONTENTION_LINE,
+            "tosm-os: thread wait contend wait=0x3000 winner=3 loser=2 pri=signal>timer\r\n"
+        );
+        assert_eq!(
+            boot_thread_wait_contention_line_bytes(),
+            b"tosm-os: thread wait contend wait=0x3000 winner=3 loser=2 pri=signal>timer\r\n"
+        );
+        assert_eq!(
+            BOOT_THREAD_WAKE_ORDER_LINE,
+            "tosm-os: thread wake order first=3 second=2 wait=0x3000 claims=2,3\r\n"
+        );
+        assert_eq!(
+            boot_thread_wake_order_line_bytes(),
+            b"tosm-os: thread wake order first=3 second=2 wait=0x3000 claims=2,3\r\n"
         );
     }
 

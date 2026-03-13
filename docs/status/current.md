@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: scheduler / threads
-- Subtask: model blocked-thread wake reason + wait-channel metadata contracts and integrate deterministic wake transcript coverage.
+- Subtask: model scheduler wait-channel contention resolution and deterministic wake-priority ordering contracts.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -14,6 +14,10 @@
 - [x] docs updated
 
 ## Progress update
+
+- Completed slice: modeled deterministic wait-channel contention arbitration for blocked threads with explicit wake-priority ordering (`signal > io > timer`) and claim-sequence tie-break metadata in the kernel scheduler model.
+- Completed slice: integrated canonical wait-contention and wake-order transcript lines into the UEFI boot flow and expanded kernel/UEFI/smoke contract coverage to enforce deterministic source/runtime transcript presence for the new ordering metadata.
+- Next slice: model multi-channel wake fairness rotation (per-channel aging) and deterministic starvation-prevention contracts.
 
 - Completed slice: fixed CI smoke timeout miss of `thread ctx save` by restoring worker task enrollment before context/lifecycle modeling in UEFI boot flow, so the deterministic handoff transcript line is emitted after scheduler reseed paths.
 - Completed slice: added a scheduler-flow regression test in `uefi-entry` that reproduces the reseed + timer-handoff path and asserts context handoff plus blocked/wake lifecycle transitions still succeed for task `2`.
