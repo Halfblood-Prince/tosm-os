@@ -102,6 +102,14 @@ pub const BOOT_THREAD_STATE_READY_LINE: &str =
 pub const BOOT_THREAD_WAKE_LINE: &str =
     "tosm-os: thread wake task=2 reason=timer wait=0x2000 runq=3 sel=1\r\n";
 
+/// Canonical wait-ownership line emitted when blocked wait-channel ownership is sampled.
+pub const BOOT_THREAD_WAIT_OWNERSHIP_LINE: &str =
+    "tosm-os: thread wait owner=1 task=2 wait=0x2000 claim=1\r\n";
+
+/// Canonical timeout wake line emitted when wake-deadline metadata is modeled.
+pub const BOOT_THREAD_WAKE_TIMEOUT_LINE: &str =
+    "tosm-os: thread wake timeout task=2 deadline=3 now=3 expired=1\r\n";
+
 /// Canonical thread-state-terminated line emitted when a worker lifecycle is cleaned up.
 pub const BOOT_THREAD_STATE_TERMINATED_LINE: &str =
     "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n";
@@ -268,6 +276,18 @@ pub const fn boot_thread_state_ready_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_thread_wake_line_bytes() -> &'static [u8] {
     BOOT_THREAD_WAKE_LINE.as_bytes()
+}
+
+/// Returns the canonical thread wait-ownership line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_wait_ownership_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_WAIT_OWNERSHIP_LINE.as_bytes()
+}
+
+/// Returns the canonical thread wake-timeout line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_wake_timeout_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_WAKE_TIMEOUT_LINE.as_bytes()
 }
 
 /// Returns the canonical thread-state-terminated line (including CRLF) for serial writers.
@@ -595,6 +615,33 @@ pub enum EarlyThreadWakeReason {
     Io,
 }
 
+const fn deterministic_wait_owner_task_id(wait_channel: u64) -> u32 {
+    match wait_channel {
+        0x0000_0000_0000_2000 => EARLY_BOOTSTRAP_TASK_ID,
+        0x0000_0000_0000_3000 => 2,
+        _ => EARLY_IDLE_TASK_ID,
+    }
+}
+
+fn sample_wait_channel_ownership(task_id: u32, wait_channel: u64) -> EarlyWaitChannelOwnership {
+    let claim_sequence = EARLY_WAIT_CHANNEL_CLAIM_SEQUENCE.fetch_add(1, Ordering::SeqCst) + 1;
+    EarlyWaitChannelOwnership {
+        wait_channel,
+        owner_task_id: deterministic_wait_owner_task_id(wait_channel),
+        blocked_task_id: task_id,
+        claim_sequence,
+    }
+}
+
+fn sample_wake_timeout(deadline_tick: u64) -> EarlyThreadWakeTimeout {
+    let observed_tick = EARLY_TIMER_TICK_COUNT.load(Ordering::SeqCst);
+    EarlyThreadWakeTimeout {
+        deadline_tick,
+        observed_tick,
+        expired: observed_tick >= deadline_tick,
+    }
+}
+
 /// Deterministic report describing blocked->ready wake metadata for scheduler modeling.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EarlyThreadWakeReport {
@@ -603,8 +650,27 @@ pub struct EarlyThreadWakeReport {
     pub to_state: EarlyThreadLifecycleState,
     pub reason: EarlyThreadWakeReason,
     pub wait_channel: u64,
+    pub wait_ownership: EarlyWaitChannelOwnership,
+    pub timeout: EarlyThreadWakeTimeout,
     pub run_queue_depth: usize,
     pub selected_task_id: u32,
+}
+
+/// Deterministic wait-channel ownership sample for blocked thread wake accounting.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyWaitChannelOwnership {
+    pub wait_channel: u64,
+    pub owner_task_id: u32,
+    pub blocked_task_id: u32,
+    pub claim_sequence: u64,
+}
+
+/// Deterministic wake timeout metadata sampled at blocked->ready wake handling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyThreadWakeTimeout {
+    pub deadline_tick: u64,
+    pub observed_tick: u64,
+    pub expired: bool,
 }
 
 /// Errors returned by deterministic thread lifecycle transition helpers.
@@ -674,6 +740,7 @@ static EARLY_TIMER_TICK_COUNT: AtomicU64 = AtomicU64::new(0);
 static EARLY_TIMER_LAST_HANDOFF_TICK: AtomicU64 = AtomicU64::new(0);
 static EARLY_SCHEDULER_SELECTED_INDEX: AtomicU64 = AtomicU64::new(0);
 static EARLY_SCHEDULER_QUEUE_WATERMARK: AtomicU64 = AtomicU64::new(2);
+static EARLY_WAIT_CHANNEL_CLAIM_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static mut EARLY_SCHEDULER_SLOTS: [EarlySchedulerSlot; EARLY_SCHEDULER_MAX_SLOTS] =
     [EarlySchedulerSlot {
         task_id: 0,
@@ -1412,6 +1479,7 @@ pub fn reset_early_scheduler_state() {
 
     EARLY_SCHEDULER_SELECTED_INDEX.store(0, Ordering::SeqCst);
     EARLY_SCHEDULER_QUEUE_WATERMARK.store(2, Ordering::SeqCst);
+    EARLY_WAIT_CHANNEL_CLAIM_SEQUENCE.store(0, Ordering::SeqCst);
 }
 
 /// Records a deterministic early timer tick and reports cumulative periodic accounting state.
@@ -1738,6 +1806,7 @@ pub fn wake_early_thread(
     task_id: u32,
     reason: EarlyThreadWakeReason,
     wait_channel: u64,
+    deadline_tick: u64,
 ) -> Result<EarlyThreadWakeReport, EarlyThreadLifecycleError> {
     let transition = transition_early_thread_lifecycle(task_id, EarlyThreadLifecycleState::Ready)?;
 
@@ -1745,12 +1814,17 @@ pub fn wake_early_thread(
         return Err(EarlyThreadLifecycleError::InvalidStateTransition);
     }
 
+    let wait_ownership = sample_wait_channel_ownership(task_id, wait_channel);
+    let timeout = sample_wake_timeout(deadline_tick);
+
     Ok(EarlyThreadWakeReport {
         task_id,
         from_state: transition.from_state,
         to_state: transition.to_state,
         reason,
         wait_channel,
+        wait_ownership,
+        timeout,
         run_queue_depth: transition.run_queue_depth,
         selected_task_id: transition.selected_task_id,
     })
@@ -2232,9 +2306,10 @@ mod tests {
         boot_thread_context_save_line_bytes, boot_thread_dequeue_line_bytes,
         boot_thread_enqueue_line_bytes, boot_thread_state_blocked_line_bytes,
         boot_thread_state_ready_line_bytes, boot_thread_state_terminated_line_bytes,
-        boot_thread_wake_line_bytes, boot_timer_ack_line_bytes, boot_timer_first_tick_line_bytes,
-        boot_timer_handoff_line_bytes, boot_timer_init_line_bytes,
-        boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
+        boot_thread_wait_ownership_line_bytes, boot_thread_wake_line_bytes,
+        boot_thread_wake_timeout_line_bytes, boot_timer_ack_line_bytes,
+        boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
+        boot_timer_init_line_bytes, boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
         dequeue_early_scheduler_task, dispatch_early_timer_interrupt, dispatch_exception,
         early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
         early_physical_memory_map, early_translation_state_valid, enqueue_early_scheduler_task,
@@ -2259,9 +2334,10 @@ mod tests {
         BOOT_THREAD_CONTEXT_META_LINE, BOOT_THREAD_CONTEXT_RESTORE_LINE,
         BOOT_THREAD_CONTEXT_SAVE_LINE, BOOT_THREAD_DEQUEUE_LINE, BOOT_THREAD_ENQUEUE_LINE,
         BOOT_THREAD_STATE_BLOCKED_LINE, BOOT_THREAD_STATE_READY_LINE,
-        BOOT_THREAD_STATE_TERMINATED_LINE, BOOT_THREAD_WAKE_LINE, BOOT_TIMER_ACK_LINE,
-        BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE,
-        BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
+        BOOT_THREAD_STATE_TERMINATED_LINE, BOOT_THREAD_WAIT_OWNERSHIP_LINE, BOOT_THREAD_WAKE_LINE,
+        BOOT_THREAD_WAKE_TIMEOUT_LINE, BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE,
+        BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE,
+        EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -3181,15 +3257,53 @@ mod tests {
             2,
             super::EarlyThreadWakeReason::Timer,
             0x0000_0000_0000_2000,
+            3,
         )
         .expect("blocked worker should transition back to ready");
         assert_eq!(ready.from_state, EarlyThreadLifecycleState::Blocked);
         assert_eq!(ready.to_state, EarlyThreadLifecycleState::Ready);
         assert_eq!(ready.reason, super::EarlyThreadWakeReason::Timer);
         assert_eq!(ready.wait_channel, 0x0000_0000_0000_2000);
+        assert_eq!(ready.wait_ownership.owner_task_id, 1);
+        assert_eq!(ready.wait_ownership.blocked_task_id, 2);
+        assert_eq!(ready.wait_ownership.claim_sequence, 1);
+        assert_eq!(ready.timeout.deadline_tick, 3);
+        assert_eq!(ready.timeout.observed_tick, 0);
+        assert!(!ready.timeout.expired);
         assert_eq!(ready.run_queue_depth, 3);
         assert_eq!(ready.selected_task_id, 1);
 
+        reset_early_scheduler_state();
+    }
+
+    #[test]
+    fn wake_timeout_reports_expiry_once_deadline_is_reached() {
+        reset_early_scheduler_state();
+        enqueue_early_scheduler_task(2).expect("enqueue should add worker task");
+        let _ = advance_early_scheduler_round_robin(super::EarlySchedulerHandoffReason::Yield);
+        transition_early_thread_lifecycle(2, EarlyThreadLifecycleState::Blocked)
+            .expect("worker should transition to blocked");
+
+        reset_early_timer_ticks();
+        let timer = init_early_timer();
+        let _ = dispatch_early_timer_interrupt(timer);
+        let _ = dispatch_early_timer_interrupt(timer);
+        let _ = dispatch_early_timer_interrupt(timer);
+
+        let ready = wake_early_thread(
+            2,
+            super::EarlyThreadWakeReason::Timer,
+            0x0000_0000_0000_2000,
+            3,
+        )
+        .expect("wake should include timeout metadata");
+
+        assert_eq!(ready.wait_ownership.claim_sequence, 1);
+        assert_eq!(ready.timeout.deadline_tick, 3);
+        assert_eq!(ready.timeout.observed_tick, 3);
+        assert!(ready.timeout.expired);
+
+        reset_early_timer_ticks();
         reset_early_scheduler_state();
     }
 
@@ -3202,6 +3316,7 @@ mod tests {
             2,
             super::EarlyThreadWakeReason::Signal,
             0x0000_0000_0000_3000,
+            4,
         )
         .expect_err("wake should reject non-blocked source state");
         assert_eq!(
@@ -3248,6 +3363,26 @@ mod tests {
         );
 
         reset_early_scheduler_state();
+    }
+
+    #[test]
+    fn wake_timeout_and_wait_owner_lines_include_crlf() {
+        assert_eq!(
+            BOOT_THREAD_WAIT_OWNERSHIP_LINE,
+            "tosm-os: thread wait owner=1 task=2 wait=0x2000 claim=1\r\n"
+        );
+        assert_eq!(
+            boot_thread_wait_ownership_line_bytes(),
+            b"tosm-os: thread wait owner=1 task=2 wait=0x2000 claim=1\r\n"
+        );
+        assert_eq!(
+            BOOT_THREAD_WAKE_TIMEOUT_LINE,
+            "tosm-os: thread wake timeout task=2 deadline=3 now=3 expired=1\r\n"
+        );
+        assert_eq!(
+            boot_thread_wake_timeout_line_bytes(),
+            b"tosm-os: thread wake timeout task=2 deadline=3 now=3 expired=1\r\n"
+        );
     }
 
     #[test]

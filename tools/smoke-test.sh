@@ -28,6 +28,8 @@ expected_thread_context_meta='tosm-os: thread ctx meta reason=yield tick=3 runq=
 expected_thread_state_blocked='tosm-os: thread state task=2 ready->blocked runq=2 selected=1'
 expected_thread_state_ready='tosm-os: thread state task=2 blocked->ready runq=3 selected=1'
 expected_thread_wake='tosm-os: thread wake task=2 reason=timer wait=0x2000 runq=3 sel=1'
+expected_thread_wait_ownership='tosm-os: thread wait owner=1 task=2 wait=0x2000 claim=1'
+expected_thread_wake_timeout='tosm-os: thread wake timeout task=2 deadline=3 now=3 expired=1'
 expected_thread_state_terminated='tosm-os: thread state task=2 ready->terminated runq=1 selected=0'
 expected_scheduler_edge_blocked='tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0'
 expected_scheduler_edge_terminated='tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0'
@@ -56,6 +58,8 @@ expected_thread_context_meta_line='tosm-os: thread ctx meta reason=yield tick=3 
 expected_thread_state_blocked_line='tosm-os: thread state task=2 ready->blocked runq=2 selected=1\r\n'
 expected_thread_state_ready_line='tosm-os: thread state task=2 blocked->ready runq=3 selected=1\r\n'
 expected_thread_wake_line='tosm-os: thread wake task=2 reason=timer wait=0x2000 runq=3 sel=1\r\n'
+expected_thread_wait_ownership_line='tosm-os: thread wait owner=1 task=2 wait=0x2000 claim=1\r\n'
+expected_thread_wake_timeout_line='tosm-os: thread wake timeout task=2 deadline=3 now=3 expired=1\r\n'
 expected_thread_state_terminated_line='tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n'
 expected_scheduler_edge_blocked_line='tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0\r\n'
 expected_scheduler_edge_terminated_line='tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0\r\n'
@@ -179,6 +183,16 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_thread_wake}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected thread-wake line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_wait_ownership}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected thread-wait-ownership line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_wake_timeout}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected thread-wake-timeout line not found"
     exit 1
   fi
 
@@ -329,6 +343,16 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_thread_wake_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected thread-wake CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_wait_ownership_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected thread-wait-ownership CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_wake_timeout_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected thread-wake-timeout CRLF contract not found"
     exit 1
   fi
 
@@ -690,6 +714,16 @@ run_qemu_smoke() {
 
   if ! grep --fixed-strings --quiet -- "${expected_thread_wake}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing thread-wake line"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_wait_ownership}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing thread-wait-ownership line"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_wake_timeout}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing thread-wake-timeout line"
     exit 1
   fi
 

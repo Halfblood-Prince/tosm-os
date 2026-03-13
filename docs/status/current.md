@@ -15,6 +15,10 @@
 
 ## Progress update
 
+- Completed slice: modeled scheduler wait-channel ownership accounting and timeout wake-deadline contracts in the kernel thread-wake path (owner task + claim sequence + deadline/observed tick metadata), plus deterministic transcript lines for ownership/timeout wake reporting.
+- Completed slice: integrated wait-ownership and wake-timeout transcript emission into UEFI boot flow and expanded kernel/UEFI/smoke checks to enforce deterministic source/runtime transcript coverage for the new wake metadata lines.
+- Next slice: model scheduler wait-channel contention resolution and deterministic wake-priority ordering contracts.
+
 - Completed slice: added deterministic blocked-thread wake modeling with explicit wake reason (`timer`/`signal`/`io`) and wait-channel metadata contracts in the kernel scheduler model, plus canonical `thread wake` transcript bytes for serial/VGA consumers.
 - Completed slice: integrated wake-contract emission into the UEFI boot transcript after blocked->ready recovery, and expanded kernel/UEFI/smoke checks to enforce deterministic wake-line presence across source and runtime transcript validation paths.
 - Next slice: model scheduler wait-channel ownership accounting and deterministic timeout wake-deadline contracts.
