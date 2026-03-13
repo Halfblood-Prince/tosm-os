@@ -393,6 +393,18 @@ pub const fn thread_wake_timeout_message_line() -> &'static [u8] {
     kernel::boot_thread_wake_timeout_line_bytes()
 }
 
+/// Returns deterministic wait-contention line expected for wake arbitration contracts.
+#[must_use]
+pub const fn thread_wait_contention_message_line() -> &'static [u8] {
+    kernel::boot_thread_wait_contention_line_bytes()
+}
+
+/// Returns deterministic wake-order line expected for wait-channel priority ordering contracts.
+#[must_use]
+pub const fn thread_wake_order_message_line() -> &'static [u8] {
+    kernel::boot_thread_wake_order_line_bytes()
+}
+
 /// Returns deterministic thread-state terminated line expected for lifecycle cleanup modeling.
 #[must_use]
 pub const fn thread_state_terminated_message_line() -> &'static [u8] {
@@ -559,6 +571,26 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         screen.write_all(thread_wake_timeout_message_line());
     }
 
+    if kernel::transition_early_thread_lifecycle(2, kernel::EarlyThreadLifecycleState::Blocked)
+        .is_ok()
+        && kernel::enqueue_early_scheduler_task(3).is_ok()
+        && kernel::transition_early_thread_lifecycle(3, kernel::EarlyThreadLifecycleState::Blocked)
+            .is_ok()
+        && kernel::resolve_early_thread_wake_contention(
+            0x0000_0000_0000_3000,
+            2,
+            kernel::EarlyThreadWakeReason::Timer,
+            3,
+            kernel::EarlyThreadWakeReason::Signal,
+        )
+        .is_ok()
+    {
+        serial.write_all(thread_wait_contention_message_line());
+        screen.write_all(thread_wait_contention_message_line());
+        serial.write_all(thread_wake_order_message_line());
+        screen.write_all(thread_wake_order_message_line());
+    }
+
     if kernel::model_early_scheduler_blocked_selection_edge_case(1).is_ok() {
         serial.write_all(scheduler_edge_blocked_message_line());
         screen.write_all(scheduler_edge_blocked_message_line());
@@ -608,8 +640,9 @@ mod tests {
         thread_context_meta_message_line, thread_context_restore_message_line,
         thread_context_save_message_line, thread_dequeue_message_line, thread_enqueue_message_line,
         thread_state_blocked_message_line, thread_state_ready_message_line,
-        thread_state_terminated_message_line, thread_wait_ownership_message_line,
-        thread_wake_message_line, thread_wake_timeout_message_line, timer_ack_message_line,
+        thread_state_terminated_message_line, thread_wait_contention_message_line,
+        thread_wait_ownership_message_line, thread_wake_message_line,
+        thread_wake_order_message_line, thread_wake_timeout_message_line, timer_ack_message_line,
         timer_first_tick_message_line, timer_handoff_message_line, timer_init_message_line,
         timer_third_tick_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400,
         LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
@@ -920,6 +953,8 @@ mod tests {
         let thread_wake_columns = thread_wake_message_line().len();
         let thread_wait_ownership_columns = thread_wait_ownership_message_line().len();
         let thread_wake_timeout_columns = thread_wake_timeout_message_line().len();
+        let thread_wait_contention_columns = thread_wait_contention_message_line().len();
+        let thread_wake_order_columns = thread_wake_order_message_line().len();
         let thread_dequeue_columns = thread_dequeue_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
@@ -943,6 +978,8 @@ mod tests {
         assert!(thread_wake_columns < VGA_TEXT_COLUMNS);
         assert!(thread_wait_ownership_columns < VGA_TEXT_COLUMNS);
         assert!(thread_wake_timeout_columns < VGA_TEXT_COLUMNS);
+        assert!(thread_wait_contention_columns < VGA_TEXT_COLUMNS);
+        assert!(thread_wake_order_columns < VGA_TEXT_COLUMNS);
         assert!(thread_dequeue_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
     }
@@ -997,6 +1034,8 @@ mod tests {
         model.write_all(thread_wake_message_line());
         model.write_all(thread_wait_ownership_message_line());
         model.write_all(thread_wake_timeout_message_line());
+        model.write_all(thread_wait_contention_message_line());
+        model.write_all(thread_wake_order_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -1052,6 +1091,8 @@ mod tests {
         model.write_all(thread_wake_message_line());
         model.write_all(thread_wait_ownership_message_line());
         model.write_all(thread_wake_timeout_message_line());
+        model.write_all(thread_wait_contention_message_line());
+        model.write_all(thread_wake_order_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -1158,6 +1199,14 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: thread wake timeout task=2 deadline=3 now=3 expired=1"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: thread wait contend wait=0x3000 winner=3 loser=2 pri=signal>timer"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: thread wake order first=3 second=2 wait=0x3000 claims=2,3"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
