@@ -15,7 +15,7 @@ const LINE_CONTROL_DLAB: u8 = 1 << 7;
 const LINE_CONTROL_8N1: u8 = 0b0000_0011;
 const FIFO_ENABLE_CLEAR_14B: u8 = 0b1100_0111;
 const MODEM_CONTROL_DTR_RTS_OUT2: u8 = 0b0000_1011;
-const BAUD_DIVISOR_38400: u8 = 3;
+const BAUD_DIVISOR_115200: u8 = 1;
 const VGA_TEXT_BUFFER_PHYS_ADDR: usize = 0xB8000;
 const VGA_TEXT_COLUMNS: usize = 80;
 const VGA_TEXT_ROWS: usize = 25;
@@ -54,8 +54,8 @@ impl SerialCom1 {
         port_write_u8(COM1_PORT + INTERRUPT_ENABLE_OFFSET, 0x00);
         // Enable DLAB so divisor latch bytes can be configured.
         port_write_u8(COM1_PORT + LINE_CONTROL_OFFSET, LINE_CONTROL_DLAB);
-        // Configure 38400 baud divisor (low byte then high byte).
-        port_write_u8(COM1_PORT, BAUD_DIVISOR_38400);
+        // Configure 115200 baud divisor (low byte then high byte).
+        port_write_u8(COM1_PORT, BAUD_DIVISOR_115200);
         port_write_u8(COM1_PORT + INTERRUPT_ENABLE_OFFSET, 0x00);
         // Clear DLAB and select 8 data bits, no parity, one stop bit.
         port_write_u8(COM1_PORT + LINE_CONTROL_OFFSET, LINE_CONTROL_8N1);
@@ -644,7 +644,7 @@ mod tests {
         thread_wait_ownership_message_line, thread_wake_message_line,
         thread_wake_order_message_line, thread_wake_timeout_message_line, timer_ack_message_line,
         timer_first_tick_message_line, timer_handoff_message_line, timer_init_message_line,
-        timer_third_tick_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400,
+        timer_third_tick_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_115200,
         LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
         VGA_TEXT_ROWS,
     };
@@ -917,10 +917,10 @@ mod tests {
     }
 
     #[test]
-    fn uart_init_values_match_8n1_38400_profile() {
+    fn uart_init_values_match_8n1_115200_profile() {
         assert_eq!(LINE_CONTROL_DLAB, 1 << 7);
         assert_eq!(LINE_CONTROL_8N1, 0b0000_0011);
-        assert_eq!(BAUD_DIVISOR_38400, 3);
+        assert_eq!(BAUD_DIVISOR_115200, 1);
     }
 
     #[test]

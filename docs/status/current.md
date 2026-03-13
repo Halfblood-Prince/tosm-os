@@ -15,6 +15,10 @@
 
 ## Progress update
 
+- Completed slice: fixed CI smoke transcript timeout risk by increasing COM1 initialization to 115200 baud in UEFI entry, reducing time spent draining deterministic scheduler/thread transcript lines before QEMU timeout windows.
+- Completed slice: updated the UART init regression test contract to assert the 8N1 + divisor=1 (115200) profile used by the firmware transcript path.
+- Next slice: model multi-channel wake fairness rotation (per-channel aging) and deterministic starvation-prevention contracts.
+
 - Completed slice: modeled deterministic wait-channel contention arbitration for blocked threads with explicit wake-priority ordering (`signal > io > timer`) and claim-sequence tie-break metadata in the kernel scheduler model.
 - Completed slice: integrated canonical wait-contention and wake-order transcript lines into the UEFI boot flow and expanded kernel/UEFI/smoke contract coverage to enforce deterministic source/runtime transcript presence for the new ordering metadata.
 - Next slice: model multi-channel wake fairness rotation (per-channel aging) and deterministic starvation-prevention contracts.
