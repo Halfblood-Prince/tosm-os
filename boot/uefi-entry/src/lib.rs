@@ -504,6 +504,20 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         screen.write_all(thread_enqueue_message_line());
     }
 
+    // Emit the deterministic dequeue transcript immediately after enqueue while scheduler state
+    // is still simple, so slow firmware/QEMU paths don't miss the dequeue contract line.
+    kernel::reset_early_scheduler_state();
+    if kernel::enqueue_early_scheduler_task(2).is_ok()
+        && kernel::dequeue_early_scheduler_task(2).is_ok()
+    {
+        serial.write_all(thread_dequeue_message_line());
+        screen.write_all(thread_dequeue_message_line());
+    }
+
+    // Restore the baseline scheduler state expected by the remaining context/lifecycle modeling.
+    kernel::reset_early_scheduler_state();
+    let _ = kernel::take_early_scheduler_timer_handoff(timer_report);
+
     let _round_robin =
         kernel::advance_early_scheduler_round_robin(kernel::EarlySchedulerHandoffReason::Yield);
 
@@ -553,25 +567,6 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         screen.write_all(thread_state_terminated_message_line());
         serial.write_all(scheduler_edge_terminated_message_line());
         screen.write_all(scheduler_edge_terminated_message_line());
-    }
-
-    // Re-seed deterministic scheduler state before dequeue contract emission so the dequeue line
-    // remains stable even after terminated-cleanup edge-case modeling above.
-    kernel::reset_early_scheduler_state();
-    if kernel::enqueue_early_scheduler_task(2).is_ok()
-        && kernel::dequeue_early_scheduler_task(2).is_ok()
-    {
-        serial.write_all(thread_dequeue_message_line());
-        screen.write_all(thread_dequeue_message_line());
-    } else {
-        // Keep boot transcripts deterministic in firmware environments where the scheduler model
-        // state can be perturbed by earlier edge-case probes: re-seed and retry once before
-        // continuing so QEMU smoke checks don't stall on a missing dequeue contract line.
-        kernel::reset_early_scheduler_state();
-        let _ = kernel::enqueue_early_scheduler_task(2);
-        let _ = kernel::dequeue_early_scheduler_task(2);
-        serial.write_all(thread_dequeue_message_line());
-        screen.write_all(thread_dequeue_message_line());
     }
 
     serial.write_all(entry_done_message_line());
