@@ -517,12 +517,14 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
     // Restore the baseline scheduler state expected by the remaining context/lifecycle modeling.
     kernel::reset_early_scheduler_state();
     let _ = kernel::take_early_scheduler_timer_handoff(timer_report);
+    let has_worker_task = kernel::enqueue_early_scheduler_task(2).is_ok();
 
     let _round_robin =
         kernel::advance_early_scheduler_round_robin(kernel::EarlySchedulerHandoffReason::Yield);
 
-    if kernel::model_early_thread_context_handoff(2, kernel::EarlySchedulerHandoffReason::Yield)
-        .is_ok()
+    if has_worker_task
+        && kernel::model_early_thread_context_handoff(2, kernel::EarlySchedulerHandoffReason::Yield)
+            .is_ok()
     {
         serial.write_all(thread_context_save_message_line());
         screen.write_all(thread_context_save_message_line());
@@ -1259,6 +1261,35 @@ mod tests {
         assert_eq!(
             model.row_bytes(VGA_TEXT_ROWS - 1),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
+        );
+    }
+
+    #[test]
+    fn scheduler_flow_preserves_worker_for_context_and_lifecycle_modeling() {
+        let timer = kernel::init_early_timer();
+        kernel::reset_early_timer_ticks();
+        let _ = kernel::dispatch_early_timer_interrupt(timer);
+        let _ = kernel::dispatch_early_timer_interrupt(timer);
+        let _ = kernel::dispatch_early_timer_interrupt(timer);
+
+        kernel::reset_early_scheduler_state();
+        let _ = kernel::take_early_scheduler_timer_handoff(timer);
+        assert!(kernel::enqueue_early_scheduler_task(2).is_ok());
+        let _ =
+            kernel::advance_early_scheduler_round_robin(kernel::EarlySchedulerHandoffReason::Yield);
+
+        assert!(kernel::model_early_thread_context_handoff(
+            2,
+            kernel::EarlySchedulerHandoffReason::Yield
+        )
+        .is_ok());
+        assert!(kernel::transition_early_thread_lifecycle(
+            2,
+            kernel::EarlyThreadLifecycleState::Blocked
+        )
+        .is_ok());
+        assert!(
+            kernel::wake_early_thread(2, kernel::EarlyThreadWakeReason::Timer, 0x2000, 3).is_ok()
         );
     }
 }

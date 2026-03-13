@@ -15,6 +15,10 @@
 
 ## Progress update
 
+- Completed slice: fixed CI smoke timeout miss of `thread ctx save` by restoring worker task enrollment before context/lifecycle modeling in UEFI boot flow, so the deterministic handoff transcript line is emitted after scheduler reseed paths.
+- Completed slice: added a scheduler-flow regression test in `uefi-entry` that reproduces the reseed + timer-handoff path and asserts context handoff plus blocked/wake lifecycle transitions still succeed for task `2`.
+- Next slice: model scheduler wait-channel contention resolution and deterministic wake-priority ordering contracts.
+
 - Completed slice: stabilized early boot scheduler transcript emission by moving deterministic `thread dequeue` output earlier in the UEFI boot flow and re-seeding scheduler state before context/lifecycle modeling, reducing timeout-induced QEMU smoke flakes where dequeue lines were missing late in boot output.
 - Next slice: model scheduler wait-channel contention resolution and deterministic wake-priority ordering contracts.
 
