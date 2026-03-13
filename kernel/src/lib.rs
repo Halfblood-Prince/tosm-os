@@ -98,6 +98,10 @@ pub const BOOT_THREAD_STATE_BLOCKED_LINE: &str =
 pub const BOOT_THREAD_STATE_READY_LINE: &str =
     "tosm-os: thread state task=2 blocked->ready runq=3 selected=1\r\n";
 
+/// Canonical thread-wake line emitted when a blocked worker resumes with wake metadata.
+pub const BOOT_THREAD_WAKE_LINE: &str =
+    "tosm-os: thread wake task=2 reason=timer wait=0x2000 runq=3 sel=1\r\n";
+
 /// Canonical thread-state-terminated line emitted when a worker lifecycle is cleaned up.
 pub const BOOT_THREAD_STATE_TERMINATED_LINE: &str =
     "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n";
@@ -258,6 +262,12 @@ pub const fn boot_thread_state_blocked_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_thread_state_ready_line_bytes() -> &'static [u8] {
     BOOT_THREAD_STATE_READY_LINE.as_bytes()
+}
+
+/// Returns the canonical thread-wake line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_wake_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_WAKE_LINE.as_bytes()
 }
 
 /// Returns the canonical thread-state-terminated line (including CRLF) for serial writers.
@@ -573,6 +583,26 @@ pub struct EarlyThreadLifecycleTransitionReport {
     pub task_id: u32,
     pub from_state: EarlyThreadLifecycleState,
     pub to_state: EarlyThreadLifecycleState,
+    pub run_queue_depth: usize,
+    pub selected_task_id: u32,
+}
+
+/// Deterministic wake reasons used when moving blocked tasks back to runnable state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyThreadWakeReason {
+    Timer,
+    Signal,
+    Io,
+}
+
+/// Deterministic report describing blocked->ready wake metadata for scheduler modeling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyThreadWakeReport {
+    pub task_id: u32,
+    pub from_state: EarlyThreadLifecycleState,
+    pub to_state: EarlyThreadLifecycleState,
+    pub reason: EarlyThreadWakeReason,
+    pub wait_channel: u64,
     pub run_queue_depth: usize,
     pub selected_task_id: u32,
 }
@@ -1703,6 +1733,29 @@ pub fn transition_early_thread_lifecycle(
     })
 }
 
+/// Wakes a blocked task into ready state with deterministic wait-channel metadata.
+pub fn wake_early_thread(
+    task_id: u32,
+    reason: EarlyThreadWakeReason,
+    wait_channel: u64,
+) -> Result<EarlyThreadWakeReport, EarlyThreadLifecycleError> {
+    let transition = transition_early_thread_lifecycle(task_id, EarlyThreadLifecycleState::Ready)?;
+
+    if transition.from_state != EarlyThreadLifecycleState::Blocked {
+        return Err(EarlyThreadLifecycleError::InvalidStateTransition);
+    }
+
+    Ok(EarlyThreadWakeReport {
+        task_id,
+        from_state: transition.from_state,
+        to_state: transition.to_state,
+        reason,
+        wait_channel,
+        run_queue_depth: transition.run_queue_depth,
+        selected_task_id: transition.selected_task_id,
+    })
+}
+
 /// Advances deterministic scheduler selection using timer handoff delta and returns combined state.
 #[must_use]
 pub fn take_early_scheduler_timer_handoff(
@@ -2179,8 +2232,9 @@ mod tests {
         boot_thread_context_save_line_bytes, boot_thread_dequeue_line_bytes,
         boot_thread_enqueue_line_bytes, boot_thread_state_blocked_line_bytes,
         boot_thread_state_ready_line_bytes, boot_thread_state_terminated_line_bytes,
-        boot_timer_ack_line_bytes, boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
-        boot_timer_init_line_bytes, boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
+        boot_thread_wake_line_bytes, boot_timer_ack_line_bytes, boot_timer_first_tick_line_bytes,
+        boot_timer_handoff_line_bytes, boot_timer_init_line_bytes,
+        boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
         dequeue_early_scheduler_task, dispatch_early_timer_interrupt, dispatch_exception,
         early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
         early_physical_memory_map, early_translation_state_valid, enqueue_early_scheduler_task,
@@ -2192,7 +2246,7 @@ mod tests {
         record_early_timer_tick, reset_early_scheduler_state, reset_early_timer_ticks,
         run_early_global_allocator_probe, run_early_heap_alloc_cycle, sample_early_timer_handoff,
         take_early_scheduler_timer_handoff, take_early_timer_handoff,
-        transition_early_thread_lifecycle, translate_early_virtual_to_physical,
+        transition_early_thread_lifecycle, translate_early_virtual_to_physical, wake_early_thread,
         EarlyFrameAllocationError, EarlyFrameAllocator, EarlyHeapAllocationError,
         EarlyHeapAllocator, EarlyHeapBootstrapError, EarlyHeapDeallocationError,
         EarlyHeapOperationError, EarlyThreadLifecycleState, GlobalAllocatorInitError, IdtEntry,
@@ -2205,9 +2259,9 @@ mod tests {
         BOOT_THREAD_CONTEXT_META_LINE, BOOT_THREAD_CONTEXT_RESTORE_LINE,
         BOOT_THREAD_CONTEXT_SAVE_LINE, BOOT_THREAD_DEQUEUE_LINE, BOOT_THREAD_ENQUEUE_LINE,
         BOOT_THREAD_STATE_BLOCKED_LINE, BOOT_THREAD_STATE_READY_LINE,
-        BOOT_THREAD_STATE_TERMINATED_LINE, BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE,
-        BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE,
-        EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
+        BOOT_THREAD_STATE_TERMINATED_LINE, BOOT_THREAD_WAKE_LINE, BOOT_TIMER_ACK_LINE,
+        BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE,
+        BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -3043,6 +3097,14 @@ mod tests {
             "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n"
         );
         assert_eq!(
+            BOOT_THREAD_WAKE_LINE,
+            "tosm-os: thread wake task=2 reason=timer wait=0x2000 runq=3 sel=1\r\n"
+        );
+        assert_eq!(
+            boot_thread_wake_line_bytes(),
+            b"tosm-os: thread wake task=2 reason=timer wait=0x2000 runq=3 sel=1\r\n"
+        );
+        assert_eq!(
             boot_thread_state_terminated_line_bytes(),
             b"tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n"
         );
@@ -3115,12 +3177,37 @@ mod tests {
         assert_eq!(blocked.run_queue_depth, 2);
         assert_eq!(blocked.selected_task_id, 1);
 
-        let ready = transition_early_thread_lifecycle(2, EarlyThreadLifecycleState::Ready)
-            .expect("blocked worker should transition back to ready");
+        let ready = wake_early_thread(
+            2,
+            super::EarlyThreadWakeReason::Timer,
+            0x0000_0000_0000_2000,
+        )
+        .expect("blocked worker should transition back to ready");
         assert_eq!(ready.from_state, EarlyThreadLifecycleState::Blocked);
         assert_eq!(ready.to_state, EarlyThreadLifecycleState::Ready);
+        assert_eq!(ready.reason, super::EarlyThreadWakeReason::Timer);
+        assert_eq!(ready.wait_channel, 0x0000_0000_0000_2000);
         assert_eq!(ready.run_queue_depth, 3);
         assert_eq!(ready.selected_task_id, 1);
+
+        reset_early_scheduler_state();
+    }
+
+    #[test]
+    fn wake_requires_blocked_source_state() {
+        reset_early_scheduler_state();
+        enqueue_early_scheduler_task(2).expect("enqueue should add worker task");
+
+        let err = wake_early_thread(
+            2,
+            super::EarlyThreadWakeReason::Signal,
+            0x0000_0000_0000_3000,
+        )
+        .expect_err("wake should reject non-blocked source state");
+        assert_eq!(
+            err,
+            super::EarlyThreadLifecycleError::InvalidStateTransition
+        );
 
         reset_early_scheduler_state();
     }

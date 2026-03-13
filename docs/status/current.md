@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: scheduler / threads
-- Subtask: model termination cleanup semantics and deterministic scheduler edge-case reporting for blocked/terminated selection paths.
+- Subtask: model blocked-thread wake reason + wait-channel metadata contracts and integrate deterministic wake transcript coverage.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -14,6 +14,10 @@
 - [x] docs updated
 
 ## Progress update
+
+- Completed slice: added deterministic blocked-thread wake modeling with explicit wake reason (`timer`/`signal`/`io`) and wait-channel metadata contracts in the kernel scheduler model, plus canonical `thread wake` transcript bytes for serial/VGA consumers.
+- Completed slice: integrated wake-contract emission into the UEFI boot transcript after blocked->ready recovery, and expanded kernel/UEFI/smoke checks to enforce deterministic wake-line presence across source and runtime transcript validation paths.
+- Next slice: model scheduler wait-channel ownership accounting and deterministic timeout wake-deadline contracts.
 
 - Completed slice: fixed CI boot-smoke transcript flake where `thread dequeue` could be skipped after terminated-cleanup modeling by reseeding deterministic scheduler state before dequeue emission in UEFI entry flow, restoring stable dequeue-line output ordering for QEMU serial checks.
 - Completed slice: increased default `QEMU_TIMEOUT_SECS` in `tools/smoke-test.sh` from 45s to 90s so slower CI runners have enough time to emit late scheduler/thread transcript lines (including thread dequeue) before timeout, while keeping explicit timeout override support.

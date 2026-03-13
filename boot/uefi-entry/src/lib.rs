@@ -375,6 +375,12 @@ pub const fn thread_state_ready_message_line() -> &'static [u8] {
     kernel::boot_thread_state_ready_line_bytes()
 }
 
+/// Returns deterministic thread-wake line expected for blocked->ready wake metadata modeling.
+#[must_use]
+pub const fn thread_wake_message_line() -> &'static [u8] {
+    kernel::boot_thread_wake_line_bytes()
+}
+
 /// Returns deterministic thread-state terminated line expected for lifecycle cleanup modeling.
 #[must_use]
 pub const fn thread_state_terminated_message_line() -> &'static [u8] {
@@ -507,11 +513,17 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         screen.write_all(thread_state_blocked_message_line());
     }
 
-    if kernel::transition_early_thread_lifecycle(2, kernel::EarlyThreadLifecycleState::Ready)
-        .is_ok()
+    if kernel::wake_early_thread(
+        2,
+        kernel::EarlyThreadWakeReason::Timer,
+        0x0000_0000_0000_2000,
+    )
+    .is_ok()
     {
         serial.write_all(thread_state_ready_message_line());
         screen.write_all(thread_state_ready_message_line());
+        serial.write_all(thread_wake_message_line());
+        screen.write_all(thread_wake_message_line());
     }
 
     if kernel::model_early_scheduler_blocked_selection_edge_case(1).is_ok() {
@@ -572,7 +584,7 @@ mod tests {
         thread_context_meta_message_line, thread_context_restore_message_line,
         thread_context_save_message_line, thread_dequeue_message_line, thread_enqueue_message_line,
         thread_state_blocked_message_line, thread_state_ready_message_line,
-        thread_state_terminated_message_line, timer_ack_message_line,
+        thread_state_terminated_message_line, thread_wake_message_line, timer_ack_message_line,
         timer_first_tick_message_line, timer_handoff_message_line, timer_init_message_line,
         timer_third_tick_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400,
         LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
@@ -829,6 +841,14 @@ mod tests {
     }
 
     #[test]
+    fn thread_wake_message_line_matches_kernel_canonical_wake_line() {
+        assert_eq!(
+            thread_wake_message_line(),
+            b"tosm-os: thread wake task=2 reason=timer wait=0x2000 runq=3 sel=1\r\n"
+        );
+    }
+
+    #[test]
     fn efi_status_success_value_is_zero() {
         assert_eq!(EfiStatus::SUCCESS.0, 0);
     }
@@ -872,6 +892,7 @@ mod tests {
         let thread_context_restore_columns = thread_context_restore_message_line().len();
         let thread_state_blocked_columns = thread_state_blocked_message_line().len();
         let thread_state_ready_columns = thread_state_ready_message_line().len();
+        let thread_wake_columns = thread_wake_message_line().len();
         let thread_dequeue_columns = thread_dequeue_message_line().len();
         let done_columns = entry_done_message_line().len();
         assert!(banner_columns < VGA_TEXT_COLUMNS);
@@ -892,6 +913,7 @@ mod tests {
         assert!(thread_context_restore_columns < VGA_TEXT_COLUMNS);
         assert!(thread_state_blocked_columns < VGA_TEXT_COLUMNS);
         assert!(thread_state_ready_columns < VGA_TEXT_COLUMNS);
+        assert!(thread_wake_columns < VGA_TEXT_COLUMNS);
         assert!(thread_dequeue_columns < VGA_TEXT_COLUMNS);
         assert!(done_columns < VGA_TEXT_COLUMNS);
     }
@@ -943,6 +965,7 @@ mod tests {
         model.write_all(thread_context_meta_message_line());
         model.write_all(thread_state_blocked_message_line());
         model.write_all(thread_state_ready_message_line());
+        model.write_all(thread_wake_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -961,6 +984,9 @@ mod tests {
         ));
         assert!(has_line(
             b"tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0"
+        ));
+        assert!(has_line(
+            b"tosm-os: thread wake task=2 reason=timer wait=0x2000 runq=3 sel=1"
         ));
         assert!(has_line(
             b"tosm-os: thread state task=2 ready->terminated runq=1 selected=0"
@@ -992,6 +1018,7 @@ mod tests {
         model.write_all(thread_context_meta_message_line());
         model.write_all(thread_state_blocked_message_line());
         model.write_all(thread_state_ready_message_line());
+        model.write_all(thread_wake_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -1086,6 +1113,10 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: thread state task=2 blocked->ready runq=3 selected=1"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: thread wake task=2 reason=timer wait=0x2000 runq=3 sel=1"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
