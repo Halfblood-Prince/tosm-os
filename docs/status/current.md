@@ -15,6 +15,9 @@
 
 ## Progress update
 
+- Completed slice: stabilized early boot scheduler transcript emission by moving deterministic `thread dequeue` output earlier in the UEFI boot flow and re-seeding scheduler state before context/lifecycle modeling, reducing timeout-induced QEMU smoke flakes where dequeue lines were missing late in boot output.
+- Next slice: model scheduler wait-channel contention resolution and deterministic wake-priority ordering contracts.
+
 - Completed slice: modeled scheduler wait-channel ownership accounting and timeout wake-deadline contracts in the kernel thread-wake path (owner task + claim sequence + deadline/observed tick metadata), plus deterministic transcript lines for ownership/timeout wake reporting.
 - Completed slice: integrated wait-ownership and wake-timeout transcript emission into UEFI boot flow and expanded kernel/UEFI/smoke checks to enforce deterministic source/runtime transcript coverage for the new wake metadata lines.
 - Next slice: model scheduler wait-channel contention resolution and deterministic wake-priority ordering contracts.
