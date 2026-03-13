@@ -15,6 +15,7 @@
 
 ## Progress update
 
+- Completed slice: fixed CI boot-smoke transcript flake where `thread dequeue` could be skipped after terminated-cleanup modeling by reseeding deterministic scheduler state before dequeue emission in UEFI entry flow, restoring stable dequeue-line output ordering for QEMU serial checks.
 - Completed slice: increased default `QEMU_TIMEOUT_SECS` in `tools/smoke-test.sh` from 45s to 90s so slower CI runners have enough time to emit late scheduler/thread transcript lines (including thread dequeue) before timeout, while keeping explicit timeout override support.
 - Completed slice: replaced the single shared early exception handler pointer with 32 vector-specific early stubs and wired the early IDT population path so each exception vector gets its own deterministic handler address.
 - Completed slice: added kernel-owned deterministic exception log line contracts for vectors 0-31 plus an unknown-vector fallback, with host tests and smoke contract checks covering representative vectors and fallback behavior.

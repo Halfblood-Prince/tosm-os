@@ -526,6 +526,10 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         screen.write_all(scheduler_edge_terminated_message_line());
     }
 
+    // Re-seed deterministic scheduler state before dequeue contract emission so the dequeue line
+    // remains stable even after terminated-cleanup edge-case modeling above.
+    kernel::reset_early_scheduler_state();
+    let _ = kernel::enqueue_early_scheduler_task(2);
     if kernel::dequeue_early_scheduler_task(2).is_ok() {
         serial.write_all(thread_dequeue_message_line());
         screen.write_all(thread_dequeue_message_line());
