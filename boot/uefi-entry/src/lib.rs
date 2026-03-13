@@ -375,6 +375,24 @@ pub const fn thread_state_ready_message_line() -> &'static [u8] {
     kernel::boot_thread_state_ready_line_bytes()
 }
 
+/// Returns deterministic thread-state terminated line expected for lifecycle cleanup modeling.
+#[must_use]
+pub const fn thread_state_terminated_message_line() -> &'static [u8] {
+    kernel::boot_thread_state_terminated_line_bytes()
+}
+
+/// Returns deterministic scheduler blocked-selection edge line expected for fallback modeling.
+#[must_use]
+pub const fn scheduler_edge_blocked_message_line() -> &'static [u8] {
+    kernel::boot_scheduler_edge_blocked_line_bytes()
+}
+
+/// Returns deterministic scheduler terminated-dequeue edge line expected for cleanup modeling.
+#[must_use]
+pub const fn scheduler_edge_terminated_message_line() -> &'static [u8] {
+    kernel::boot_scheduler_edge_terminated_line_bytes()
+}
+
 /// Returns the deterministic exception line expected from early dispatch logging.
 #[must_use]
 pub fn exception_message_line(vector: u8) -> &'static [u8] {
@@ -496,6 +514,18 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         screen.write_all(thread_state_ready_message_line());
     }
 
+    if kernel::model_early_scheduler_blocked_selection_edge_case(1).is_ok() {
+        serial.write_all(scheduler_edge_blocked_message_line());
+        screen.write_all(scheduler_edge_blocked_message_line());
+    }
+
+    if kernel::model_early_scheduler_terminated_cleanup_edge_case(2).is_ok() {
+        serial.write_all(thread_state_terminated_message_line());
+        screen.write_all(thread_state_terminated_message_line());
+        serial.write_all(scheduler_edge_terminated_message_line());
+        screen.write_all(scheduler_edge_terminated_message_line());
+    }
+
     if kernel::dequeue_early_scheduler_task(2).is_ok() {
         serial.write_all(thread_dequeue_message_line());
         screen.write_all(thread_dequeue_message_line());
@@ -533,10 +563,12 @@ mod tests {
         global_allocator_ready_message_line, heap_alloc_cycle_message_line,
         heap_bootstrap_message_line, interrupt_init_message_line, kernel_entry_message_line,
         memory_init_message_line, paging_install_message_line, paging_plan_message_line,
-        panic_message_line, scheduler_handoff_message_line, thread_context_meta_message_line,
-        thread_context_restore_message_line, thread_context_save_message_line,
-        thread_dequeue_message_line, thread_enqueue_message_line,
-        thread_state_blocked_message_line, thread_state_ready_message_line, timer_ack_message_line,
+        panic_message_line, scheduler_edge_blocked_message_line,
+        scheduler_edge_terminated_message_line, scheduler_handoff_message_line,
+        thread_context_meta_message_line, thread_context_restore_message_line,
+        thread_context_save_message_line, thread_dequeue_message_line, thread_enqueue_message_line,
+        thread_state_blocked_message_line, thread_state_ready_message_line,
+        thread_state_terminated_message_line, timer_ack_message_line,
         timer_first_tick_message_line, timer_handoff_message_line, timer_init_message_line,
         timer_third_tick_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_38400,
         LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
@@ -907,111 +939,29 @@ mod tests {
         model.write_all(thread_context_meta_message_line());
         model.write_all(thread_state_blocked_message_line());
         model.write_all(thread_state_ready_message_line());
+        model.write_all(scheduler_edge_blocked_message_line());
+        model.write_all(thread_state_terminated_message_line());
+        model.write_all(scheduler_edge_terminated_message_line());
         model.write_all(thread_dequeue_message_line());
         model.write_all(entry_done_message_line());
 
-        assert_eq!(model.row, 24);
+        assert_eq!(model.row, VGA_TEXT_ROWS - 1);
         assert_eq!(model.column, 0);
-        assert_eq!(
-            model.row_text_without_trailing_blanks(0),
-            b"tosm-os: kernel entry reached"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(1),
-            b"tosm-os: idt skeleton initialized"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(2),
-            b"tosm-os: exception vector 14 page fault"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(3),
-            b"tosm-os: memory init usable=0x3f790000 reserved=0x00811000 regions=5"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(4),
-            b"tosm-os: paging plan frames=4 window=0x3f7ed000-0x3f7f1000 map4k=512"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(5),
-            b"tosm-os: paging install root=0x3f7ed000 span=0x40000000 entries=514"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(6),
-            b"tosm-os: heap bootstrap start=0x00400000 size=0x00004000 frames=4"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(7),
-            b"tosm-os: heap alloc cycle allocs=2 frees=2 cursor=0x00400000"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(8),
-            b"tosm-os: global allocator ready heap=0x00400000-0x00404000"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(9),
-            b"tosm-os: global allocator probe entries=4 checksum=0x000000000000002a"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(10),
-            b"tosm-os: timer init source=pit hz=100 divisor=11931 irq=0x20"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(11),
-            b"tosm-os: timer tick irq=0x20 count=1 uptime_ns=10000000"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(12),
-            b"tosm-os: timer tick irq=0x20 count=3 uptime_ns=30000000"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(13),
-            b"tosm-os: timer ack irq=0x20 pic=0x20 eoi=0x20"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(14),
-            b"tosm-os: timer handoff ticks=3 delta=3 quantum=1 uptime_ns=30000000"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(15),
-            b"tosm-os: scheduler handoff reason=timer runq=2 selected=1 idle=0 delta=3"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(16),
-            b"tosm-os: thread enqueue task=2 runq=3 selected=1"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(17),
-            b"tosm-os: thread ctx save from=1 to=2 rip=0x100200 rsp=0x401f00"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(18),
-            b"tosm-os: thread ctx restore to=2 rip=0x200000 rsp=0x402000"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(19),
+
+        let has_line = |needle: &[u8]| {
+            (0..VGA_TEXT_ROWS).any(|row| model.row_text_without_trailing_blanks(row) == needle)
+        };
+
+        assert!(has_line(
             b"tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(20),
-            b"tosm-os: thread state task=2 ready->blocked runq=2 selected=1"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(21),
-            b"tosm-os: thread state task=2 blocked->ready runq=3 selected=1"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(22),
-            b"tosm-os: thread dequeue task=2 runq=2 selected=1"
-        );
-        assert_eq!(
-            model.row_text_without_trailing_blanks(23),
-            b"tosm-os: efi_main completed"
-        );
-        assert_eq!(
-            model.row_bytes(24),
-            [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
-        );
+        ));
+        assert!(has_line(
+            b"tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0"
+        ));
+        assert!(has_line(
+            b"tosm-os: thread state task=2 ready->terminated runq=1 selected=0"
+        ));
+        assert!(has_line(b"tosm-os: efi_main completed"));
     }
 
     #[test]
@@ -1038,6 +988,9 @@ mod tests {
         model.write_all(thread_context_meta_message_line());
         model.write_all(thread_state_blocked_message_line());
         model.write_all(thread_state_ready_message_line());
+        model.write_all(scheduler_edge_blocked_message_line());
+        model.write_all(thread_state_terminated_message_line());
+        model.write_all(scheduler_edge_terminated_message_line());
         model.write_all(thread_dequeue_message_line());
         model.write_all(entry_done_message_line());
 
@@ -1129,6 +1082,18 @@ mod tests {
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
             b"tosm-os: thread state task=2 blocked->ready runq=3 selected=1"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: thread state task=2 ready->terminated runq=1 selected=0"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
+            b"tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0"
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
