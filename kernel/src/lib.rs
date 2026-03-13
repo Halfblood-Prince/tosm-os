@@ -90,6 +90,14 @@ pub const BOOT_THREAD_CONTEXT_RESTORE_LINE: &str =
 pub const BOOT_THREAD_CONTEXT_META_LINE: &str =
     "tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3\r\n";
 
+/// Canonical thread-state-blocked line emitted when a runnable worker transitions to blocked.
+pub const BOOT_THREAD_STATE_BLOCKED_LINE: &str =
+    "tosm-os: thread state task=2 ready->blocked runq=2 selected=1\r\n";
+
+/// Canonical thread-state-ready line emitted when a blocked worker transitions back to runnable.
+pub const BOOT_THREAD_STATE_READY_LINE: &str =
+    "tosm-os: thread state task=2 blocked->ready runq=3 selected=1\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -226,6 +234,18 @@ pub const fn boot_thread_context_restore_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_thread_context_meta_line_bytes() -> &'static [u8] {
     BOOT_THREAD_CONTEXT_META_LINE.as_bytes()
+}
+
+/// Returns the canonical thread-state-blocked line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_state_blocked_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_STATE_BLOCKED_LINE.as_bytes()
+}
+
+/// Returns the canonical thread-state-ready line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_state_ready_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_STATE_READY_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -504,6 +524,35 @@ pub struct EarlyThreadContextSwitchMetadata {
     pub timer_tick: u64,
     pub run_queue_depth: usize,
     pub queue_watermark: usize,
+    pub from_state: EarlyThreadLifecycleState,
+    pub to_state: EarlyThreadLifecycleState,
+}
+
+/// Deterministic lifecycle states tracked per-thread during early scheduler bring-up.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyThreadLifecycleState {
+    Ready,
+    Running,
+    Blocked,
+    Terminated,
+}
+
+/// Deterministic report describing a modeled thread lifecycle transition.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyThreadLifecycleTransitionReport {
+    pub task_id: u32,
+    pub from_state: EarlyThreadLifecycleState,
+    pub to_state: EarlyThreadLifecycleState,
+    pub run_queue_depth: usize,
+    pub selected_task_id: u32,
+}
+
+/// Errors returned by deterministic thread lifecycle transition helpers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyThreadLifecycleError {
+    TaskNotFound,
+    InvalidStateTransition,
+    IdleTaskMutation,
 }
 
 /// Errors returned by deterministic early thread context handoff helpers.
@@ -553,6 +602,8 @@ static mut EARLY_SCHEDULER_SLOTS: [EarlySchedulerSlot; EARLY_SCHEDULER_MAX_SLOTS
         task_id: 0,
         runnable: false,
     }; EARLY_SCHEDULER_MAX_SLOTS];
+static mut EARLY_THREAD_LIFECYCLE_STATES: [EarlyThreadLifecycleState; EARLY_SCHEDULER_MAX_SLOTS] =
+    [EarlyThreadLifecycleState::Terminated; EARLY_SCHEDULER_MAX_SLOTS];
 
 /// Returns true when a value is 4KiB aligned.
 #[must_use]
@@ -1266,14 +1317,20 @@ pub fn reset_early_scheduler_state() {
             task_id: 0,
             runnable: false,
         }; EARLY_SCHEDULER_MAX_SLOTS];
+        EARLY_THREAD_LIFECYCLE_STATES =
+            [EarlyThreadLifecycleState::Terminated; EARLY_SCHEDULER_MAX_SLOTS];
+
         EARLY_SCHEDULER_SLOTS[0] = EarlySchedulerSlot {
             task_id: EARLY_IDLE_TASK_ID,
             runnable: true,
         };
+        EARLY_THREAD_LIFECYCLE_STATES[0] = EarlyThreadLifecycleState::Running;
+
         EARLY_SCHEDULER_SLOTS[1] = EarlySchedulerSlot {
             task_id: EARLY_BOOTSTRAP_TASK_ID,
             runnable: true,
         };
+        EARLY_THREAD_LIFECYCLE_STATES[1] = EarlyThreadLifecycleState::Ready;
     }
 
     EARLY_SCHEDULER_SELECTED_INDEX.store(0, Ordering::SeqCst);
@@ -1368,6 +1425,21 @@ pub fn sample_early_scheduler_snapshot(
     }
 }
 
+fn scheduler_state_index_for_task(task_id: u32) -> Option<usize> {
+    let mut slot_index = 0;
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    unsafe {
+        while slot_index < EARLY_SCHEDULER_MAX_SLOTS {
+            let slot = EARLY_SCHEDULER_SLOTS[slot_index];
+            if slot.task_id == task_id {
+                return Some(slot_index);
+            }
+            slot_index += 1;
+        }
+    }
+    None
+}
+
 fn scheduler_index_for_task(task_id: u32) -> Option<usize> {
     let mut slot_index = 0;
     // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
@@ -1405,6 +1477,21 @@ pub fn advance_early_scheduler_round_robin(
 ) -> EarlySchedulerSnapshot {
     let selected_index = EARLY_SCHEDULER_SELECTED_INDEX.load(Ordering::SeqCst) as usize;
     let next_index = next_runnable_scheduler_index(selected_index).unwrap_or(selected_index);
+
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    unsafe {
+        if selected_index < EARLY_SCHEDULER_MAX_SLOTS
+            && EARLY_SCHEDULER_SLOTS[selected_index].runnable
+            && EARLY_THREAD_LIFECYCLE_STATES[selected_index] != EarlyThreadLifecycleState::Blocked
+        {
+            EARLY_THREAD_LIFECYCLE_STATES[selected_index] = EarlyThreadLifecycleState::Ready;
+        }
+
+        if next_index < EARLY_SCHEDULER_MAX_SLOTS && EARLY_SCHEDULER_SLOTS[next_index].runnable {
+            EARLY_THREAD_LIFECYCLE_STATES[next_index] = EarlyThreadLifecycleState::Running;
+        }
+    }
+
     EARLY_SCHEDULER_SELECTED_INDEX.store(next_index as u64, Ordering::SeqCst);
     sample_early_scheduler_snapshot(reason)
 }
@@ -1430,6 +1517,7 @@ pub fn enqueue_early_scheduler_task(
                     task_id,
                     runnable: true,
                 };
+                EARLY_THREAD_LIFECYCLE_STATES[slot_index] = EarlyThreadLifecycleState::Ready;
                 let snapshot = sample_early_scheduler_snapshot(EarlySchedulerHandoffReason::Yield);
                 let observed_depth = snapshot.run_queue_depth as u64;
                 let previous = EARLY_SCHEDULER_QUEUE_WATERMARK.load(Ordering::SeqCst);
@@ -1467,6 +1555,7 @@ pub fn dequeue_early_scheduler_task(
             task_id: 0,
             runnable: false,
         };
+        EARLY_THREAD_LIFECYCLE_STATES[slot_index] = EarlyThreadLifecycleState::Terminated;
     }
 
     let selected_index = EARLY_SCHEDULER_SELECTED_INDEX.load(Ordering::SeqCst) as usize;
@@ -1477,6 +1566,91 @@ pub fn dequeue_early_scheduler_task(
     let snapshot = sample_early_scheduler_snapshot(EarlySchedulerHandoffReason::Yield);
     Ok(EarlySchedulerMutationReport {
         task_id,
+        run_queue_depth: snapshot.run_queue_depth,
+        selected_task_id: snapshot.selected_task_id,
+    })
+}
+
+/// Applies a deterministic thread lifecycle transition and updates queue runnable state.
+pub fn transition_early_thread_lifecycle(
+    task_id: u32,
+    to_state: EarlyThreadLifecycleState,
+) -> Result<EarlyThreadLifecycleTransitionReport, EarlyThreadLifecycleError> {
+    if task_id == EARLY_IDLE_TASK_ID {
+        return Err(EarlyThreadLifecycleError::IdleTaskMutation);
+    }
+
+    let Some(slot_index) = scheduler_state_index_for_task(task_id) else {
+        return Err(EarlyThreadLifecycleError::TaskNotFound);
+    };
+
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    let (from_state, was_runnable) = unsafe {
+        (
+            EARLY_THREAD_LIFECYCLE_STATES[slot_index],
+            EARLY_SCHEDULER_SLOTS[slot_index].runnable,
+        )
+    };
+
+    let valid = matches!(
+        (from_state, to_state),
+        (
+            EarlyThreadLifecycleState::Ready,
+            EarlyThreadLifecycleState::Running
+        ) | (
+            EarlyThreadLifecycleState::Running,
+            EarlyThreadLifecycleState::Ready
+        ) | (
+            EarlyThreadLifecycleState::Running,
+            EarlyThreadLifecycleState::Blocked
+        ) | (
+            EarlyThreadLifecycleState::Ready,
+            EarlyThreadLifecycleState::Blocked
+        ) | (
+            EarlyThreadLifecycleState::Blocked,
+            EarlyThreadLifecycleState::Ready
+        ) | (
+            EarlyThreadLifecycleState::Ready,
+            EarlyThreadLifecycleState::Terminated
+        ) | (
+            EarlyThreadLifecycleState::Blocked,
+            EarlyThreadLifecycleState::Terminated
+        ) | (
+            EarlyThreadLifecycleState::Running,
+            EarlyThreadLifecycleState::Terminated
+        )
+    );
+    if !valid {
+        return Err(EarlyThreadLifecycleError::InvalidStateTransition);
+    }
+
+    // SAFETY: deterministic scheduler model uses single-threaded static state during boot/tests.
+    unsafe {
+        EARLY_THREAD_LIFECYCLE_STATES[slot_index] = to_state;
+
+        match to_state {
+            EarlyThreadLifecycleState::Ready | EarlyThreadLifecycleState::Running => {
+                EARLY_SCHEDULER_SLOTS[slot_index].runnable = true;
+            }
+            EarlyThreadLifecycleState::Blocked | EarlyThreadLifecycleState::Terminated => {
+                EARLY_SCHEDULER_SLOTS[slot_index].runnable = false;
+                if to_state == EarlyThreadLifecycleState::Terminated {
+                    EARLY_SCHEDULER_SLOTS[slot_index].task_id = 0;
+                }
+            }
+        }
+    }
+
+    let selected_index = EARLY_SCHEDULER_SELECTED_INDEX.load(Ordering::SeqCst) as usize;
+    if selected_index == slot_index && was_runnable {
+        let _ = advance_early_scheduler_round_robin(EarlySchedulerHandoffReason::Yield);
+    }
+
+    let snapshot = sample_early_scheduler_snapshot(EarlySchedulerHandoffReason::Yield);
+    Ok(EarlyThreadLifecycleTransitionReport {
+        task_id,
+        from_state,
+        to_state,
         run_queue_depth: snapshot.run_queue_depth,
         selected_task_id: snapshot.selected_task_id,
     })
@@ -1556,6 +1730,8 @@ pub fn model_early_thread_context_handoff(
         timer_tick: EARLY_TIMER_TICK_COUNT.load(Ordering::SeqCst),
         run_queue_depth: snapshot.run_queue_depth,
         queue_watermark: EARLY_SCHEDULER_QUEUE_WATERMARK.load(Ordering::SeqCst) as usize,
+        from_state: EarlyThreadLifecycleState::Running,
+        to_state: EarlyThreadLifecycleState::Ready,
     };
 
     Ok(EarlyThreadContextHandoffReport {
@@ -1916,7 +2092,8 @@ mod tests {
         boot_panic_line_bytes, boot_scheduler_handoff_line_bytes,
         boot_thread_context_meta_line_bytes, boot_thread_context_restore_line_bytes,
         boot_thread_context_save_line_bytes, boot_thread_dequeue_line_bytes,
-        boot_thread_enqueue_line_bytes, boot_timer_ack_line_bytes,
+        boot_thread_enqueue_line_bytes, boot_thread_state_blocked_line_bytes,
+        boot_thread_state_ready_line_bytes, boot_timer_ack_line_bytes,
         boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
         boot_timer_init_line_bytes, boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
         dequeue_early_scheduler_task, dispatch_early_timer_interrupt, dispatch_exception,
@@ -1928,9 +2105,10 @@ mod tests {
         model_early_thread_context_handoff, record_early_timer_tick, reset_early_scheduler_state,
         reset_early_timer_ticks, run_early_global_allocator_probe, run_early_heap_alloc_cycle,
         sample_early_timer_handoff, take_early_scheduler_timer_handoff, take_early_timer_handoff,
-        translate_early_virtual_to_physical, EarlyFrameAllocationError, EarlyFrameAllocator,
-        EarlyHeapAllocationError, EarlyHeapAllocator, EarlyHeapBootstrapError,
-        EarlyHeapDeallocationError, EarlyHeapOperationError, GlobalAllocatorInitError, IdtEntry,
+        transition_early_thread_lifecycle, translate_early_virtual_to_physical,
+        EarlyFrameAllocationError, EarlyFrameAllocator, EarlyHeapAllocationError,
+        EarlyHeapAllocator, EarlyHeapBootstrapError, EarlyHeapDeallocationError,
+        EarlyHeapOperationError, EarlyThreadLifecycleState, GlobalAllocatorInitError, IdtEntry,
         PhysicalMemoryRegionKind, VirtualAddress, VirtualAddressTranslationError, BOOT_BANNER,
         BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE,
         BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
@@ -1938,9 +2116,9 @@ mod tests {
         BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_SCHEDULER_HANDOFF_LINE,
         BOOT_THREAD_CONTEXT_META_LINE, BOOT_THREAD_CONTEXT_RESTORE_LINE,
         BOOT_THREAD_CONTEXT_SAVE_LINE, BOOT_THREAD_DEQUEUE_LINE, BOOT_THREAD_ENQUEUE_LINE,
-        BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE,
-        BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR,
-        EXCEPTION_VECTOR_COUNT,
+        BOOT_THREAD_STATE_BLOCKED_LINE, BOOT_THREAD_STATE_READY_LINE, BOOT_TIMER_ACK_LINE,
+        BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE,
+        BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -2753,6 +2931,25 @@ mod tests {
             b"tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3\r\n"
         );
     }
+    #[test]
+    fn thread_lifecycle_line_bytes_include_crlf() {
+        assert_eq!(
+            BOOT_THREAD_STATE_BLOCKED_LINE,
+            "tosm-os: thread state task=2 ready->blocked runq=2 selected=1\r\n"
+        );
+        assert_eq!(
+            boot_thread_state_blocked_line_bytes(),
+            b"tosm-os: thread state task=2 ready->blocked runq=2 selected=1\r\n"
+        );
+        assert_eq!(
+            BOOT_THREAD_STATE_READY_LINE,
+            "tosm-os: thread state task=2 blocked->ready runq=3 selected=1\r\n"
+        );
+        assert_eq!(
+            boot_thread_state_ready_line_bytes(),
+            b"tosm-os: thread state task=2 blocked->ready runq=3 selected=1\r\n"
+        );
+    }
 
     #[test]
     fn scheduler_context_handoff_reports_saved_and_restored_registers() {
@@ -2782,8 +2979,36 @@ mod tests {
         assert_eq!(handoff.metadata.timer_tick, 3);
         assert_eq!(handoff.metadata.run_queue_depth, 3);
         assert_eq!(handoff.metadata.queue_watermark, 3);
+        assert_eq!(
+            handoff.metadata.from_state,
+            EarlyThreadLifecycleState::Running
+        );
+        assert_eq!(handoff.metadata.to_state, EarlyThreadLifecycleState::Ready);
 
         reset_early_timer_ticks();
+        reset_early_scheduler_state();
+    }
+
+    #[test]
+    fn thread_lifecycle_blocked_ready_transitions_update_scheduler_contracts() {
+        reset_early_scheduler_state();
+        enqueue_early_scheduler_task(2).expect("enqueue should add worker task");
+        let _ = advance_early_scheduler_round_robin(super::EarlySchedulerHandoffReason::Yield);
+
+        let blocked = transition_early_thread_lifecycle(2, EarlyThreadLifecycleState::Blocked)
+            .expect("worker should transition to blocked");
+        assert_eq!(blocked.from_state, EarlyThreadLifecycleState::Ready);
+        assert_eq!(blocked.to_state, EarlyThreadLifecycleState::Blocked);
+        assert_eq!(blocked.run_queue_depth, 2);
+        assert_eq!(blocked.selected_task_id, 1);
+
+        let ready = transition_early_thread_lifecycle(2, EarlyThreadLifecycleState::Ready)
+            .expect("blocked worker should transition back to ready");
+        assert_eq!(ready.from_state, EarlyThreadLifecycleState::Blocked);
+        assert_eq!(ready.to_state, EarlyThreadLifecycleState::Ready);
+        assert_eq!(ready.run_queue_depth, 3);
+        assert_eq!(ready.selected_task_id, 1);
+
         reset_early_scheduler_state();
     }
 
