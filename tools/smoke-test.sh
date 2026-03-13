@@ -504,7 +504,10 @@ run_qemu_smoke() {
     qemu_accel_args=(${QEMU_ACCEL_ARGS})
   fi
 
-  local qemu_timeout_secs="${QEMU_TIMEOUT_SECS:-45}"
+  # CI runners without hardware acceleration can take noticeably longer to
+  # reach the final scheduler/thread transcript lines, so keep a conservative
+  # default timeout while still allowing explicit overrides.
+  local qemu_timeout_secs="${QEMU_TIMEOUT_SECS:-90}"
   local qemu_status=0
   set +e
   timeout "${qemu_timeout_secs}s" "${qemu_bin}" \

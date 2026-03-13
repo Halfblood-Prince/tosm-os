@@ -15,6 +15,7 @@
 
 ## Progress update
 
+- Completed slice: increased default `QEMU_TIMEOUT_SECS` in `tools/smoke-test.sh` from 45s to 90s so slower CI runners have enough time to emit late scheduler/thread transcript lines (including thread dequeue) before timeout, while keeping explicit timeout override support.
 - Completed slice: replaced the single shared early exception handler pointer with 32 vector-specific early stubs and wired the early IDT population path so each exception vector gets its own deterministic handler address.
 - Completed slice: added kernel-owned deterministic exception log line contracts for vectors 0-31 plus an unknown-vector fallback, with host tests and smoke contract checks covering representative vectors and fallback behavior.
 - Completed slice: wired firmware-path exception dispatch logging through kernel dispatch contracts (including CRLF-safe byte accessors), emitting a deterministic vector 14 page-fault line between interrupt init and completion logs.
