@@ -1,7 +1,7 @@
 # Current milestone
 
 - Active milestone: scheduler / threads
-- Subtask: extend scheduler context handoff contracts with cause/state metadata (reason, tick, queue watermark).
+- Subtask: model termination cleanup semantics and deterministic scheduler edge-case reporting for blocked/terminated selection paths.
 - Status: in progress
 - Note: Codex writes code/docs only and waits for GitHub Actions feedback after merge to `main`.
 
@@ -45,7 +45,8 @@
 - Completed slice: introduced deterministic per-thread context handoff modeling (save/restore register snapshots), integrated canonical thread-context transcript lines across kernel + UEFI boot flow, and extended tests/smoke contracts to cover the new handoff output.
 - Completed slice: extended thread context handoff reports with deterministic metadata (reason, timer tick, run-queue depth, queue watermark), added canonical thread-ctx-meta transcript contracts, and integrated those checks across kernel/UEFI tests plus smoke/QEMU serial validations.
 - Completed slice: added deterministic per-thread lifecycle transition modeling (ready/running/blocked/terminated) wired into scheduler runnable-state bookkeeping, then integrated canonical blocked/ready transcript contracts across kernel, UEFI flow, and smoke checks.
-- Next slice: model termination cleanup semantics and expose deterministic scheduler error/report contracts for blocked/terminated selection edge cases.
+- Completed slice: modeled deterministic scheduler edge-case contracts for blocked-selected fallback and terminated-task dequeue rejection, added canonical thread-state-terminated plus scheduler-edge transcript lines, and integrated them through kernel/UEFI/smoke validation paths.
+- Next slice: extend scheduler edge-case modeling with explicit blocked-to-ready wake reason and deterministic wait-channel metadata contracts.
 
 <!-- ci-status:start -->
 ## Latest CI automation

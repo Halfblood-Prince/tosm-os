@@ -27,6 +27,9 @@ expected_thread_context_restore='tosm-os: thread ctx restore to=2 rip=0x200000 r
 expected_thread_context_meta='tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3'
 expected_thread_state_blocked='tosm-os: thread state task=2 ready->blocked runq=2 selected=1'
 expected_thread_state_ready='tosm-os: thread state task=2 blocked->ready runq=3 selected=1'
+expected_thread_state_terminated='tosm-os: thread state task=2 ready->terminated runq=1 selected=0'
+expected_scheduler_edge_blocked='tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0'
+expected_scheduler_edge_terminated='tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0'
 expected_banner_line='tosm-os: kernel entry reached\r\n'
 expected_panic_line='tosm-os: panic in uefi-entry\r\n'
 expected_interrupt_init_line='tosm-os: idt skeleton initialized\r\n'
@@ -51,6 +54,9 @@ expected_thread_context_restore_line='tosm-os: thread ctx restore to=2 rip=0x200
 expected_thread_context_meta_line='tosm-os: thread ctx meta reason=yield tick=3 runq=3 watermark=3\r\n'
 expected_thread_state_blocked_line='tosm-os: thread state task=2 ready->blocked runq=2 selected=1\r\n'
 expected_thread_state_ready_line='tosm-os: thread state task=2 blocked->ready runq=3 selected=1\r\n'
+expected_thread_state_terminated_line='tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n'
+expected_scheduler_edge_blocked_line='tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0\r\n'
+expected_scheduler_edge_terminated_line='tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0\r\n'
 expected_exception_page_fault_line='tosm-os: exception vector 14 page fault\r\n'
 
 contract_check() {
@@ -166,6 +172,21 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_thread_state_ready}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected thread-state-ready line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_state_terminated}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected thread-state-terminated line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_edge_blocked}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected scheduler-edge-blocked line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_edge_terminated}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected scheduler-edge-terminated line not found"
     exit 1
   fi
 
@@ -296,6 +317,21 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_thread_state_ready_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected thread-state-ready CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_state_terminated_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected thread-state-terminated CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_edge_blocked_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected scheduler-edge-blocked CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_edge_terminated_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected scheduler-edge-terminated CRLF contract not found"
     exit 1
   fi
 
@@ -640,6 +676,21 @@ run_qemu_smoke() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_edge_blocked}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing scheduler-edge-blocked line"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_thread_state_terminated}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing thread-state-terminated line"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_edge_terminated}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing scheduler-edge-terminated line"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_entry_done}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing completion line"
     exit 1
@@ -654,7 +705,7 @@ run_qemu_smoke() {
     return 2
   fi
 
-  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, timer-init, timer-first-tick, timer-third-tick, timer-ack, timer-handoff, scheduler-handoff, thread-enqueue, thread-dequeue, thread-ctx-save, thread-ctx-restore, thread-ctx-meta, thread-state-blocked, thread-state-ready, and completion lines"
+  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, timer-init, timer-first-tick, timer-third-tick, timer-ack, timer-handoff, scheduler-handoff, thread-enqueue, thread-dequeue, thread-ctx-save, thread-ctx-restore, thread-ctx-meta, thread-state-blocked, thread-state-ready, scheduler-edge-blocked, thread-state-terminated, scheduler-edge-terminated, and completion lines"
 }
 
 contract_check

@@ -98,6 +98,18 @@ pub const BOOT_THREAD_STATE_BLOCKED_LINE: &str =
 pub const BOOT_THREAD_STATE_READY_LINE: &str =
     "tosm-os: thread state task=2 blocked->ready runq=3 selected=1\r\n";
 
+/// Canonical thread-state-terminated line emitted when a worker lifecycle is cleaned up.
+pub const BOOT_THREAD_STATE_TERMINATED_LINE: &str =
+    "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n";
+
+/// Canonical scheduler-edge line emitted when selected blocked task falls back to idle.
+pub const BOOT_SCHEDULER_EDGE_BLOCKED_LINE: &str =
+    "tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0\r\n";
+
+/// Canonical scheduler-edge line emitted when terminated task dequeue is rejected.
+pub const BOOT_SCHEDULER_EDGE_TERMINATED_LINE: &str =
+    "tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0\r\n";
+
 /// Returns the kernel boot banner as a byte slice for firmware serial writers.
 #[must_use]
 pub const fn boot_banner_bytes() -> &'static [u8] {
@@ -246,6 +258,24 @@ pub const fn boot_thread_state_blocked_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_thread_state_ready_line_bytes() -> &'static [u8] {
     BOOT_THREAD_STATE_READY_LINE.as_bytes()
+}
+
+/// Returns the canonical thread-state-terminated line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_state_terminated_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_STATE_TERMINATED_LINE.as_bytes()
+}
+
+/// Returns the canonical scheduler-edge blocked-selection line (including CRLF).
+#[must_use]
+pub const fn boot_scheduler_edge_blocked_line_bytes() -> &'static [u8] {
+    BOOT_SCHEDULER_EDGE_BLOCKED_LINE.as_bytes()
+}
+
+/// Returns the canonical scheduler-edge terminated-dequeue line (including CRLF).
+#[must_use]
+pub const fn boot_scheduler_edge_terminated_line_bytes() -> &'static [u8] {
+    BOOT_SCHEDULER_EDGE_TERMINATED_LINE.as_bytes()
 }
 
 /// Maximum number of deterministic early memory-map regions modeled during bring-up.
@@ -569,6 +599,23 @@ pub enum EarlySchedulerMutationError {
     TaskNotFound,
     RunQueueFull,
     IdleTaskMutation,
+}
+
+/// Deterministic scheduler edge cases modeled during blocked/terminated selection handling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlySchedulerEdgeCase {
+    BlockedSelectedFallback,
+    TerminatedDequeueRejected,
+}
+
+/// Deterministic report emitted after modeling blocked/terminated scheduler edge handling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerEdgeCaseReport {
+    pub edge_case: EarlySchedulerEdgeCase,
+    pub task_id: u32,
+    pub run_queue_depth: usize,
+    pub selected_task_id: u32,
+    pub dequeue_error: Option<EarlySchedulerMutationError>,
 }
 
 pub const PAGE_SIZE_4K_BYTES: u64 = 0x1000;
@@ -1743,6 +1790,43 @@ pub fn model_early_thread_context_handoff(
     })
 }
 
+/// Models the selected-task-blocked edge case and reports deterministic fallback scheduler state.
+pub fn model_early_scheduler_blocked_selection_edge_case(
+    task_id: u32,
+) -> Result<EarlySchedulerEdgeCaseReport, EarlyThreadLifecycleError> {
+    let _transition =
+        transition_early_thread_lifecycle(task_id, EarlyThreadLifecycleState::Blocked)?;
+    if let Some(idle_index) = scheduler_index_for_task(EARLY_IDLE_TASK_ID) {
+        EARLY_SCHEDULER_SELECTED_INDEX.store(idle_index as u64, Ordering::SeqCst);
+    }
+    let snapshot = sample_early_scheduler_snapshot(EarlySchedulerHandoffReason::Yield);
+
+    Ok(EarlySchedulerEdgeCaseReport {
+        edge_case: EarlySchedulerEdgeCase::BlockedSelectedFallback,
+        task_id,
+        run_queue_depth: snapshot.run_queue_depth,
+        selected_task_id: snapshot.selected_task_id,
+        dequeue_error: None,
+    })
+}
+
+/// Models termination cleanup by rejecting a dequeue for an already-terminated task slot.
+pub fn model_early_scheduler_terminated_cleanup_edge_case(
+    task_id: u32,
+) -> Result<EarlySchedulerEdgeCaseReport, EarlyThreadLifecycleError> {
+    let terminated =
+        transition_early_thread_lifecycle(task_id, EarlyThreadLifecycleState::Terminated)?;
+    let dequeue_error = dequeue_early_scheduler_task(task_id).err();
+
+    Ok(EarlySchedulerEdgeCaseReport {
+        edge_case: EarlySchedulerEdgeCase::TerminatedDequeueRejected,
+        task_id,
+        run_queue_depth: terminated.run_queue_depth,
+        selected_task_id: terminated.selected_task_id,
+        dequeue_error,
+    })
+}
+
 /// Number of architectural exception vectors reserved at boot.
 pub const EXCEPTION_VECTOR_COUNT: usize = 32;
 
@@ -2089,12 +2173,13 @@ mod tests {
         boot_global_allocator_ready_line_bytes, boot_heap_alloc_cycle_line_bytes,
         boot_heap_bootstrap_line_bytes, boot_interrupt_init_line_bytes,
         boot_memory_init_line_bytes, boot_paging_install_line_bytes, boot_paging_plan_line_bytes,
-        boot_panic_line_bytes, boot_scheduler_handoff_line_bytes,
+        boot_panic_line_bytes, boot_scheduler_edge_blocked_line_bytes,
+        boot_scheduler_edge_terminated_line_bytes, boot_scheduler_handoff_line_bytes,
         boot_thread_context_meta_line_bytes, boot_thread_context_restore_line_bytes,
         boot_thread_context_save_line_bytes, boot_thread_dequeue_line_bytes,
         boot_thread_enqueue_line_bytes, boot_thread_state_blocked_line_bytes,
-        boot_thread_state_ready_line_bytes, boot_timer_ack_line_bytes,
-        boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
+        boot_thread_state_ready_line_bytes, boot_thread_state_terminated_line_bytes,
+        boot_timer_ack_line_bytes, boot_timer_first_tick_line_bytes, boot_timer_handoff_line_bytes,
         boot_timer_init_line_bytes, boot_timer_third_tick_line_bytes, bootstrap_early_kernel_heap,
         dequeue_early_scheduler_task, dispatch_early_timer_interrupt, dispatch_exception,
         early_idt_descriptor, early_idt_entries, early_paging_table_snapshot,
@@ -2102,9 +2187,11 @@ mod tests {
         exception_log_line, exception_log_line_bytes, init_early_global_allocator,
         init_early_interrupts, init_early_paging_plan, init_early_physical_memory,
         init_early_timer, install_early_paging, is_canonical_virtual_address, is_page_aligned_4k,
-        model_early_thread_context_handoff, record_early_timer_tick, reset_early_scheduler_state,
-        reset_early_timer_ticks, run_early_global_allocator_probe, run_early_heap_alloc_cycle,
-        sample_early_timer_handoff, take_early_scheduler_timer_handoff, take_early_timer_handoff,
+        model_early_scheduler_blocked_selection_edge_case,
+        model_early_scheduler_terminated_cleanup_edge_case, model_early_thread_context_handoff,
+        record_early_timer_tick, reset_early_scheduler_state, reset_early_timer_ticks,
+        run_early_global_allocator_probe, run_early_heap_alloc_cycle, sample_early_timer_handoff,
+        take_early_scheduler_timer_handoff, take_early_timer_handoff,
         transition_early_thread_lifecycle, translate_early_virtual_to_physical,
         EarlyFrameAllocationError, EarlyFrameAllocator, EarlyHeapAllocationError,
         EarlyHeapAllocator, EarlyHeapBootstrapError, EarlyHeapDeallocationError,
@@ -2113,12 +2200,14 @@ mod tests {
         BOOT_BANNER_LINE, BOOT_ENTRY_DONE_LINE, BOOT_GLOBAL_ALLOCATOR_PROBE_LINE,
         BOOT_GLOBAL_ALLOCATOR_READY_LINE, BOOT_HEAP_ALLOC_CYCLE_LINE, BOOT_HEAP_BOOTSTRAP_LINE,
         BOOT_INTERRUPT_INIT_LINE, BOOT_MEMORY_INIT_LINE, BOOT_PAGING_INSTALL_LINE,
-        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_SCHEDULER_HANDOFF_LINE,
+        BOOT_PAGING_PLAN_LINE, BOOT_PANIC_LINE, BOOT_SCHEDULER_EDGE_BLOCKED_LINE,
+        BOOT_SCHEDULER_EDGE_TERMINATED_LINE, BOOT_SCHEDULER_HANDOFF_LINE,
         BOOT_THREAD_CONTEXT_META_LINE, BOOT_THREAD_CONTEXT_RESTORE_LINE,
         BOOT_THREAD_CONTEXT_SAVE_LINE, BOOT_THREAD_DEQUEUE_LINE, BOOT_THREAD_ENQUEUE_LINE,
-        BOOT_THREAD_STATE_BLOCKED_LINE, BOOT_THREAD_STATE_READY_LINE, BOOT_TIMER_ACK_LINE,
-        BOOT_TIMER_FIRST_TICK_LINE, BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE,
-        BOOT_TIMER_THIRD_TICK_LINE, EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
+        BOOT_THREAD_STATE_BLOCKED_LINE, BOOT_THREAD_STATE_READY_LINE,
+        BOOT_THREAD_STATE_TERMINATED_LINE, BOOT_TIMER_ACK_LINE, BOOT_TIMER_FIRST_TICK_LINE,
+        BOOT_TIMER_HANDOFF_LINE, BOOT_TIMER_INIT_LINE, BOOT_TIMER_THIRD_TICK_LINE,
+        EARLY_GLOBAL_ALLOCATOR, EXCEPTION_VECTOR_COUNT,
     };
 
     #[test]
@@ -2949,6 +3038,30 @@ mod tests {
             boot_thread_state_ready_line_bytes(),
             b"tosm-os: thread state task=2 blocked->ready runq=3 selected=1\r\n"
         );
+        assert_eq!(
+            BOOT_THREAD_STATE_TERMINATED_LINE,
+            "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n"
+        );
+        assert_eq!(
+            boot_thread_state_terminated_line_bytes(),
+            b"tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n"
+        );
+        assert_eq!(
+            BOOT_SCHEDULER_EDGE_BLOCKED_LINE,
+            "tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0\r\n"
+        );
+        assert_eq!(
+            boot_scheduler_edge_blocked_line_bytes(),
+            b"tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0\r\n"
+        );
+        assert_eq!(
+            BOOT_SCHEDULER_EDGE_TERMINATED_LINE,
+            "tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0\r\n"
+        );
+        assert_eq!(
+            boot_scheduler_edge_terminated_line_bytes(),
+            b"tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0\r\n"
+        );
     }
 
     #[test]
@@ -3008,6 +3121,44 @@ mod tests {
         assert_eq!(ready.to_state, EarlyThreadLifecycleState::Ready);
         assert_eq!(ready.run_queue_depth, 3);
         assert_eq!(ready.selected_task_id, 1);
+
+        reset_early_scheduler_state();
+    }
+
+    #[test]
+    fn scheduler_edge_case_reports_cover_blocked_fallback_and_terminated_cleanup() {
+        reset_early_scheduler_state();
+        enqueue_early_scheduler_task(2).expect("enqueue should add worker task");
+
+        let _ = advance_early_scheduler_round_robin(super::EarlySchedulerHandoffReason::Yield);
+
+        let blocked = model_early_scheduler_blocked_selection_edge_case(1)
+            .expect("selected bootstrap task should block and fall back to idle");
+        assert_eq!(
+            blocked.edge_case,
+            super::EarlySchedulerEdgeCase::BlockedSelectedFallback
+        );
+        assert_eq!(blocked.task_id, 1);
+        assert_eq!(blocked.run_queue_depth, 2);
+        assert_eq!(blocked.selected_task_id, 0);
+        assert_eq!(blocked.dequeue_error, None);
+
+        let _ = transition_early_thread_lifecycle(2, EarlyThreadLifecycleState::Ready)
+            .expect("worker should stay runnable before termination cleanup");
+
+        let terminated = model_early_scheduler_terminated_cleanup_edge_case(2)
+            .expect("termination cleanup modeling should succeed");
+        assert_eq!(
+            terminated.edge_case,
+            super::EarlySchedulerEdgeCase::TerminatedDequeueRejected
+        );
+        assert_eq!(terminated.task_id, 2);
+        assert_eq!(terminated.run_queue_depth, 1);
+        assert_eq!(terminated.selected_task_id, 0);
+        assert_eq!(
+            terminated.dequeue_error,
+            Some(super::EarlySchedulerMutationError::TaskNotFound)
+        );
 
         reset_early_scheduler_state();
     }
