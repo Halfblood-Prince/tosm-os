@@ -51,7 +51,8 @@
 - Completed slice: extended thread context handoff reports with deterministic metadata (reason, timer tick, run-queue depth, queue watermark), added canonical thread-ctx-meta transcript contracts, and integrated those checks across kernel/UEFI tests plus smoke/QEMU serial validations.
 - Completed slice: added deterministic per-thread lifecycle transition modeling (ready/running/blocked/terminated) wired into scheduler runnable-state bookkeeping, then integrated canonical blocked/ready transcript contracts across kernel, UEFI flow, and smoke checks.
 - Completed slice: modeled deterministic scheduler edge-case contracts for blocked-selected fallback and terminated-task dequeue rejection, added canonical thread-state-terminated plus scheduler-edge transcript lines, and integrated them through kernel/UEFI/smoke validation paths.
-- Next slice: extend scheduler edge-case modeling with explicit blocked-to-ready wake reason and deterministic wait-channel metadata contracts.
+- Completed slice: hardened UEFI dequeue transcript emission with a deterministic reseed+retry fallback so `thread dequeue` still gets emitted even if prior edge-case probes perturb scheduler model state during firmware execution.
+- Next slice: model scheduler wait-channel ownership accounting and deterministic timeout wake-deadline contracts.
 
 <!-- ci-status:start -->
 ## Latest CI automation
