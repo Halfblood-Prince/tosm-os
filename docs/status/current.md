@@ -73,8 +73,8 @@
 ## Latest CI automation
 
 - Last CI conclusion: failure
-- Last CI run: `23074835071`
-- Last tested commit: `e5570f193c4f9e645cbc24d7e2b94c23cdb373b0`
+- Last CI run: `23075137235`
+- Last tested commit: `35182382d15195dd40261f8dce48865bfc3d0426`
 - Recommended next action for Codex: fix the smallest concrete failure from the latest CI excerpts before adding new scope
 - Detailed summary: `docs/status/latest-ci.md`
 <!-- ci-status:end -->
