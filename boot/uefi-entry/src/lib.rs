@@ -16,7 +16,9 @@ const LINE_CONTROL_8N1: u8 = 0b0000_0011;
 const FIFO_ENABLE_CLEAR_14B: u8 = 0b1100_0111;
 const MODEM_CONTROL_DTR_RTS_OUT2: u8 = 0b0000_1011;
 const BAUD_DIVISOR_115200: u8 = 1;
-const UART_TRANSMIT_READY_SPIN_LIMIT: usize = 1_000_000;
+// Keep the UART readiness spin budget short so QEMU/firmware environments that never expose
+// LSR.TX-empty don't burn most of the smoke-test runtime in per-byte polling loops.
+const UART_TRANSMIT_READY_SPIN_LIMIT: usize = 4_096;
 const VGA_TEXT_BUFFER_PHYS_ADDR: usize = 0xB8000;
 const VGA_TEXT_COLUMNS: usize = 80;
 const VGA_TEXT_ROWS: usize = 25;
