@@ -15,6 +15,10 @@
 
 ## Progress update
 
+- Completed slice: modeled deterministic multi-channel wake fairness rotation with per-channel aging metadata in the kernel scheduler wake path, including starvation-prevention arbitration contracts and duplicate-participant rejection.
+- Completed slice: integrated canonical wake-fairness transcript emission into the UEFI boot flow and expanded kernel/UEFI/smoke contract coverage so source/runtime checks require the new aging-rotation line.
+- Next slice: model scheduler runnable-queue aging decay/rebalance contracts after fairness-based wake selection.
+
 - Completed slice: hardened COM1 transmit polling in UEFI entry with a deterministic bounded spin-wait before each byte write, preventing indefinite stalls when UART transmitter-ready status lags on slower CI/QEMU paths.
 - Completed slice: kept scheduler/thread transcript ordering intact while reducing risk of smoke timeout failures caused by blocked serial draining during late lifecycle lines (including thread-state-ready).
 - Next slice: model multi-channel wake fairness rotation (per-channel aging) and deterministic starvation-prevention contracts.
