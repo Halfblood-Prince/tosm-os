@@ -45,11 +45,15 @@ pub struct EfiHandle(pub *mut c_void);
 pub struct EfiSystemTable(pub *mut c_void);
 
 /// Minimal COM1 serial port writer for early boot diagnostics.
-struct SerialCom1;
+struct SerialCom1 {
+    transmitter_ready_assumed: bool,
+}
 
 impl SerialCom1 {
     const fn new() -> Self {
-        Self
+        Self {
+            transmitter_ready_assumed: false,
+        }
     }
 
     fn init(&mut self) {
@@ -69,17 +73,22 @@ impl SerialCom1 {
     }
 
     fn write_byte(&mut self, byte: u8) {
-        self.wait_for_transmitter_ready();
+        if !self.transmitter_ready_assumed {
+            self.wait_for_transmitter_ready();
+        }
         port_write_u8(COM1_PORT, byte);
     }
 
-    fn wait_for_transmitter_ready(&self) {
+    fn wait_for_transmitter_ready(&mut self) {
         let mut spins = 0usize;
         while !self.transmitter_empty() {
             // Keep early serial output deterministic but avoid hanging forever when emulated UART
             // status bits lag on slower CI runners.
             spins += 1;
             if spins >= UART_TRANSMIT_READY_SPIN_LIMIT {
+                // If UART status never reports TX-empty, fail open so long transcript emission
+                // doesn't spend the full smoke timeout spinning for each byte.
+                self.transmitter_ready_assumed = true;
                 break;
             }
             core::hint::spin_loop();
