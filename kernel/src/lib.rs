@@ -126,6 +126,10 @@ pub const BOOT_THREAD_WAKE_FAIRNESS_LINE: &str =
 pub const BOOT_SCHEDULER_REBALANCE_LINE: &str =
     "tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1\r\n";
 
+/// Canonical scheduler carryover line emitted after time-slice carry + threshold preemption modeling.
+pub const BOOT_SCHEDULER_CARRYOVER_LINE: &str =
+    "tosm-os: scheduler carryover task=2 rem=2 carry=1 thresh=3 preempt=0 next=2\r\n";
+
 /// Canonical thread-state-terminated line emitted when a worker lifecycle is cleaned up.
 pub const BOOT_THREAD_STATE_TERMINATED_LINE: &str =
     "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n";
@@ -328,6 +332,12 @@ pub const fn boot_thread_wake_fairness_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_scheduler_rebalance_line_bytes() -> &'static [u8] {
     BOOT_SCHEDULER_REBALANCE_LINE.as_bytes()
+}
+
+/// Returns the canonical scheduler carryover line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_scheduler_carryover_line_bytes() -> &'static [u8] {
+    BOOT_SCHEDULER_CARRYOVER_LINE.as_bytes()
 }
 
 /// Returns the canonical thread-state-terminated line (including CRLF) for serial writers.
@@ -777,6 +787,25 @@ pub struct EarlySchedulerRebalanceReport {
     pub total_decay_applied: u16,
 }
 
+/// Deterministic scheduler time-slice sample used for carryover + preemption-threshold modeling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerTimesliceSlot {
+    pub task_id: u32,
+    pub remaining_ticks: u8,
+    pub carry_ticks: u8,
+}
+
+/// Deterministic scheduler carryover report for thresholded preemption contracts.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerCarryoverReport {
+    pub selected_task_id: u32,
+    pub selected_remaining_ticks: u8,
+    pub selected_carry_ticks: u8,
+    pub preemption_threshold: u8,
+    pub preempted: bool,
+    pub next_task_id: u32,
+}
+
 /// Errors returned by deterministic thread lifecycle transition helpers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EarlyThreadLifecycleError {
@@ -811,6 +840,14 @@ pub enum EarlyThreadWakeFairnessError {
 pub enum EarlySchedulerRebalanceError {
     DuplicateTask,
     ZeroFloorAge,
+}
+
+/// Errors returned by deterministic scheduler carryover + preemption-threshold modeling helpers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlySchedulerCarryoverError {
+    DuplicateTask,
+    ZeroThreshold,
+    SelectedTaskNotFound,
 }
 
 /// Errors returned by deterministic scheduler slot-mutation helpers.
@@ -2136,6 +2173,65 @@ pub fn rebalance_early_scheduler_runnable_aging(
         floor_age,
         boost_applied,
         total_decay_applied,
+    })
+}
+
+/// Models scheduler time-slice carryover accounting and deterministic preemption thresholds.
+pub fn model_early_scheduler_timeslice_carryover(
+    slots: [EarlySchedulerTimesliceSlot; 3],
+    selected_task_id: u32,
+    preemption_threshold: u8,
+) -> Result<EarlySchedulerCarryoverReport, EarlySchedulerCarryoverError> {
+    if preemption_threshold == 0 {
+        return Err(EarlySchedulerCarryoverError::ZeroThreshold);
+    }
+
+    if slots[0].task_id == slots[1].task_id
+        || slots[0].task_id == slots[2].task_id
+        || slots[1].task_id == slots[2].task_id
+    {
+        return Err(EarlySchedulerCarryoverError::DuplicateTask);
+    }
+
+    let mut selected_index = None;
+    let mut index = 0usize;
+    while index < slots.len() {
+        if slots[index].task_id == selected_task_id {
+            selected_index = Some(index);
+            break;
+        }
+        index += 1;
+    }
+
+    let Some(selected_index) = selected_index else {
+        return Err(EarlySchedulerCarryoverError::SelectedTaskNotFound);
+    };
+
+    let selected = slots[selected_index];
+    let effective_ticks = selected
+        .remaining_ticks
+        .saturating_add(selected.carry_ticks.min(preemption_threshold));
+    let preempted = effective_ticks < preemption_threshold;
+
+    let mut next_task_id = selected.task_id;
+    if preempted {
+        let mut fallback_index = 0usize;
+        while fallback_index < slots.len() {
+            if fallback_index != selected_index {
+                next_task_id = slots[fallback_index].task_id;
+                break;
+            }
+            fallback_index += 1;
+        }
+    }
+
+    Ok(EarlySchedulerCarryoverReport {
+        selected_task_id: selected.task_id,
+        selected_remaining_ticks: selected.remaining_ticks,
+        selected_carry_ticks: selected.carry_ticks,
+        preemption_threshold,
+        preempted,
+        next_task_id,
     })
 }
 
@@ -3855,6 +3951,152 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_timeslice_carryover_model_reports_non_preempt_threshold_hit() {
+        let report = super::model_early_scheduler_timeslice_carryover(
+            [
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 2,
+                    remaining_ticks: 2,
+                    carry_ticks: 1,
+                },
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 3,
+                    remaining_ticks: 4,
+                    carry_ticks: 0,
+                },
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 4,
+                    remaining_ticks: 3,
+                    carry_ticks: 1,
+                },
+            ],
+            2,
+            3,
+        )
+        .expect("carryover should keep selected task when threshold is met");
+
+        assert_eq!(report.selected_task_id, 2);
+        assert_eq!(report.selected_remaining_ticks, 2);
+        assert_eq!(report.selected_carry_ticks, 1);
+        assert_eq!(report.preemption_threshold, 3);
+        assert!(!report.preempted);
+        assert_eq!(report.next_task_id, 2);
+    }
+
+    #[test]
+    fn scheduler_timeslice_carryover_model_reports_preempt_when_below_threshold() {
+        let report = super::model_early_scheduler_timeslice_carryover(
+            [
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 2,
+                    remaining_ticks: 1,
+                    carry_ticks: 0,
+                },
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 3,
+                    remaining_ticks: 4,
+                    carry_ticks: 0,
+                },
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 4,
+                    remaining_ticks: 2,
+                    carry_ticks: 0,
+                },
+            ],
+            2,
+            3,
+        )
+        .expect("carryover should preempt selected task when threshold is missed");
+
+        assert!(report.preempted);
+        assert_eq!(report.next_task_id, 3);
+    }
+
+    #[test]
+    fn scheduler_timeslice_carryover_model_rejects_duplicate_threshold_and_unknown_selected() {
+        let duplicate = super::model_early_scheduler_timeslice_carryover(
+            [
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 2,
+                    remaining_ticks: 2,
+                    carry_ticks: 1,
+                },
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 2,
+                    remaining_ticks: 4,
+                    carry_ticks: 0,
+                },
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 4,
+                    remaining_ticks: 3,
+                    carry_ticks: 1,
+                },
+            ],
+            2,
+            3,
+        )
+        .expect_err("carryover should reject duplicate task ids");
+        assert_eq!(
+            duplicate,
+            super::EarlySchedulerCarryoverError::DuplicateTask
+        );
+
+        let zero_threshold = super::model_early_scheduler_timeslice_carryover(
+            [
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 2,
+                    remaining_ticks: 2,
+                    carry_ticks: 1,
+                },
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 3,
+                    remaining_ticks: 4,
+                    carry_ticks: 0,
+                },
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 4,
+                    remaining_ticks: 3,
+                    carry_ticks: 1,
+                },
+            ],
+            2,
+            0,
+        )
+        .expect_err("carryover should reject zero threshold");
+        assert_eq!(
+            zero_threshold,
+            super::EarlySchedulerCarryoverError::ZeroThreshold
+        );
+
+        let not_found = super::model_early_scheduler_timeslice_carryover(
+            [
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 2,
+                    remaining_ticks: 2,
+                    carry_ticks: 1,
+                },
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 3,
+                    remaining_ticks: 4,
+                    carry_ticks: 0,
+                },
+                super::EarlySchedulerTimesliceSlot {
+                    task_id: 4,
+                    remaining_ticks: 3,
+                    carry_ticks: 1,
+                },
+            ],
+            5,
+            3,
+        )
+        .expect_err("carryover should reject unknown selected task id");
+        assert_eq!(
+            not_found,
+            super::EarlySchedulerCarryoverError::SelectedTaskNotFound
+        );
+    }
+
+    #[test]
     fn wake_timeout_and_wait_owner_lines_include_crlf() {
         assert_eq!(
             BOOT_THREAD_WAIT_OWNERSHIP_LINE,
@@ -3895,6 +4137,14 @@ mod tests {
         assert_eq!(
             super::boot_scheduler_rebalance_line_bytes(),
             b"tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1\r\n"
+        );
+        assert_eq!(
+            super::BOOT_SCHEDULER_CARRYOVER_LINE,
+            "tosm-os: scheduler carryover task=2 rem=2 carry=1 thresh=3 preempt=0 next=2\r\n"
+        );
+        assert_eq!(
+            super::boot_scheduler_carryover_line_bytes(),
+            b"tosm-os: scheduler carryover task=2 rem=2 carry=1 thresh=3 preempt=0 next=2\r\n"
         );
     }
 

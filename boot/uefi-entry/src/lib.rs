@@ -433,6 +433,12 @@ pub const fn scheduler_rebalance_message_line() -> &'static [u8] {
     kernel::boot_scheduler_rebalance_line_bytes()
 }
 
+/// Returns deterministic scheduler carryover line expected for timeslice-threshold contracts.
+#[must_use]
+pub const fn scheduler_carryover_message_line() -> &'static [u8] {
+    kernel::boot_scheduler_carryover_line_bytes()
+}
+
 /// Returns deterministic thread-state terminated line expected for lifecycle cleanup modeling.
 #[must_use]
 pub const fn thread_state_terminated_message_line() -> &'static [u8] {
@@ -674,6 +680,33 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         screen.write_all(scheduler_rebalance_message_line());
     }
 
+    if kernel::model_early_scheduler_timeslice_carryover(
+        [
+            kernel::EarlySchedulerTimesliceSlot {
+                task_id: 2,
+                remaining_ticks: 2,
+                carry_ticks: 1,
+            },
+            kernel::EarlySchedulerTimesliceSlot {
+                task_id: 3,
+                remaining_ticks: 4,
+                carry_ticks: 0,
+            },
+            kernel::EarlySchedulerTimesliceSlot {
+                task_id: 4,
+                remaining_ticks: 3,
+                carry_ticks: 1,
+            },
+        ],
+        2,
+        3,
+    )
+    .is_ok()
+    {
+        serial.write_all(scheduler_carryover_message_line());
+        screen.write_all(scheduler_carryover_message_line());
+    }
+
     if kernel::model_early_scheduler_blocked_selection_edge_case(1).is_ok() {
         serial.write_all(scheduler_edge_blocked_message_line());
         screen.write_all(scheduler_edge_blocked_message_line());
@@ -718,7 +751,7 @@ mod tests {
         global_allocator_ready_message_line, heap_alloc_cycle_message_line,
         heap_bootstrap_message_line, interrupt_init_message_line, kernel_entry_message_line,
         memory_init_message_line, paging_install_message_line, paging_plan_message_line,
-        panic_message_line, scheduler_edge_blocked_message_line,
+        panic_message_line, scheduler_carryover_message_line, scheduler_edge_blocked_message_line,
         scheduler_edge_terminated_message_line, scheduler_handoff_message_line,
         thread_context_meta_message_line, thread_context_restore_message_line,
         thread_context_save_message_line, thread_dequeue_message_line, thread_enqueue_message_line,
@@ -1121,6 +1154,7 @@ mod tests {
         model.write_all(thread_wake_order_message_line());
         model.write_all(thread_wake_fairness_message_line());
         model.write_all(super::scheduler_rebalance_message_line());
+        model.write_all(scheduler_carryover_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -1145,6 +1179,9 @@ mod tests {
         ));
         assert!(has_line(
             b"tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1"
+        ));
+        assert!(has_line(
+            b"tosm-os: scheduler carryover task=2 rem=2 carry=1 thresh=3 preempt=0 next=2"
         ));
         assert!(has_line(
             b"tosm-os: thread state task=2 ready->terminated runq=1 selected=0"
@@ -1183,6 +1220,7 @@ mod tests {
         model.write_all(thread_wake_order_message_line());
         model.write_all(thread_wake_fairness_message_line());
         model.write_all(super::scheduler_rebalance_message_line());
+        model.write_all(scheduler_carryover_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -1308,6 +1346,10 @@ mod tests {
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
+            b"tosm-os: scheduler carryover task=2 rem=2 carry=1 thresh=3 preempt=0 next=2"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
             b"tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0"
         );
         assert_ne!(
@@ -1379,6 +1421,47 @@ mod tests {
             super::scheduler_rebalance_message_line(),
             b"tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1\r\n"
         );
+    }
+
+    #[test]
+    fn scheduler_carryover_message_matches_kernel_contract() {
+        assert_eq!(
+            scheduler_carryover_message_line(),
+            b"tosm-os: scheduler carryover task=2 rem=2 carry=1 thresh=3 preempt=0 next=2\r\n"
+        );
+    }
+
+    #[test]
+    fn scheduler_carryover_model_matches_expected_threshold_behavior() {
+        let report = kernel::model_early_scheduler_timeslice_carryover(
+            [
+                kernel::EarlySchedulerTimesliceSlot {
+                    task_id: 2,
+                    remaining_ticks: 2,
+                    carry_ticks: 1,
+                },
+                kernel::EarlySchedulerTimesliceSlot {
+                    task_id: 3,
+                    remaining_ticks: 4,
+                    carry_ticks: 0,
+                },
+                kernel::EarlySchedulerTimesliceSlot {
+                    task_id: 4,
+                    remaining_ticks: 3,
+                    carry_ticks: 1,
+                },
+            ],
+            2,
+            3,
+        )
+        .expect("carryover model should resolve deterministic timeslice sample");
+
+        assert_eq!(report.selected_task_id, 2);
+        assert_eq!(report.selected_remaining_ticks, 2);
+        assert_eq!(report.selected_carry_ticks, 1);
+        assert_eq!(report.preemption_threshold, 3);
+        assert!(!report.preempted);
+        assert_eq!(report.next_task_id, 2);
     }
 
     #[test]
