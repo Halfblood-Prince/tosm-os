@@ -15,6 +15,10 @@
 
 ## Progress update
 
+- Completed slice: hardened COM1 transmit polling in UEFI entry with a deterministic bounded spin-wait before each byte write, preventing indefinite stalls when UART transmitter-ready status lags on slower CI/QEMU paths.
+- Completed slice: kept scheduler/thread transcript ordering intact while reducing risk of smoke timeout failures caused by blocked serial draining during late lifecycle lines (including thread-state-ready).
+- Next slice: model multi-channel wake fairness rotation (per-channel aging) and deterministic starvation-prevention contracts.
+
 - Completed slice: fixed CI smoke transcript timeout risk by increasing COM1 initialization to 115200 baud in UEFI entry, reducing time spent draining deterministic scheduler/thread transcript lines before QEMU timeout windows.
 - Completed slice: updated the UART init regression test contract to assert the 8N1 + divisor=1 (115200) profile used by the firmware transcript path.
 - Next slice: model multi-channel wake fairness rotation (per-channel aging) and deterministic starvation-prevention contracts.

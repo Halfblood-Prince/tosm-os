@@ -16,6 +16,7 @@ const LINE_CONTROL_8N1: u8 = 0b0000_0011;
 const FIFO_ENABLE_CLEAR_14B: u8 = 0b1100_0111;
 const MODEM_CONTROL_DTR_RTS_OUT2: u8 = 0b0000_1011;
 const BAUD_DIVISOR_115200: u8 = 1;
+const UART_TRANSMIT_READY_SPIN_LIMIT: usize = 1_000_000;
 const VGA_TEXT_BUFFER_PHYS_ADDR: usize = 0xB8000;
 const VGA_TEXT_COLUMNS: usize = 80;
 const VGA_TEXT_ROWS: usize = 25;
@@ -66,8 +67,21 @@ impl SerialCom1 {
     }
 
     fn write_byte(&mut self, byte: u8) {
-        while !self.transmitter_empty() {}
+        self.wait_for_transmitter_ready();
         port_write_u8(COM1_PORT, byte);
+    }
+
+    fn wait_for_transmitter_ready(&self) {
+        let mut spins = 0usize;
+        while !self.transmitter_empty() {
+            // Keep early serial output deterministic but avoid hanging forever when emulated UART
+            // status bits lag on slower CI runners.
+            spins += 1;
+            if spins >= UART_TRANSMIT_READY_SPIN_LIMIT {
+                break;
+            }
+            core::hint::spin_loop();
+        }
     }
 
     fn write_all(&mut self, bytes: &[u8]) {
