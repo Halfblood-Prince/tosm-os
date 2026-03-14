@@ -15,6 +15,10 @@
 
 ## Progress update
 
+- Completed slice: hardened UEFI wake transcript emission with a deterministic scheduler reseed + blocked-state retry path so `thread state ready`/wake lines still emit when prior probes perturb lifecycle state on slower QEMU firmware runs.
+- Completed slice: prioritized the latest CI smoke failure by fixing the smallest concrete missing line (`thread-state-ready`) without adding new milestone scope.
+- Next slice: model scheduler preemption debt repayment and deterministic starvation backoff contracts.
+
 - Completed slice: modeled scheduler time-slice carryover accounting with deterministic preemption-threshold contracts (selected task, carry ticks, threshold crossing, preempt/non-preempt next-task selection) in the kernel scheduler model.
 - Completed slice: integrated canonical scheduler-carryover transcript emission into UEFI boot flow and expanded kernel/UEFI/smoke contract coverage so source/runtime checks enforce the new carryover line.
 - Next slice: model scheduler preemption debt repayment and deterministic starvation backoff contracts.
