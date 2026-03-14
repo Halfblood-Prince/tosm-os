@@ -35,6 +35,9 @@
 - Completed slice: integrated canonical wait-contention and wake-order transcript lines into the UEFI boot flow and expanded kernel/UEFI/smoke contract coverage to enforce deterministic source/runtime transcript presence for the new ordering metadata.
 - Next slice: model multi-channel wake fairness rotation (per-channel aging) and deterministic starvation-prevention contracts.
 
+- Completed slice: fixed the latest CI smoke timeout flake by reducing UEFI UART TX-ready polling budget (`UART_TRANSMIT_READY_SPIN_LIMIT`) from 1,000,000 to 4,096 spins per byte, preventing long firmware stalls that could suppress late scheduler transcript lines in QEMU.
+- Next slice: monitor CI smoke runtime after the UART polling-budget fix, then continue advancing scheduler/thread contracts if stable.
+
 - Completed slice: fixed CI smoke timeout miss of `thread ctx save` by restoring worker task enrollment before context/lifecycle modeling in UEFI boot flow, so the deterministic handoff transcript line is emitted after scheduler reseed paths.
 - Completed slice: added a scheduler-flow regression test in `uefi-entry` that reproduces the reseed + timer-handoff path and asserts context handoff plus blocked/wake lifecycle transitions still succeed for task `2`.
 - Next slice: model scheduler wait-channel contention resolution and deterministic wake-priority ordering contracts.
