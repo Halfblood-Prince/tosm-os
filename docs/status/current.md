@@ -15,6 +15,9 @@
 
 ## Progress update
 
+- Completed slice: fixed CI smoke timeout failure (`thread-state-ready` missing) by increasing the default QEMU smoke timeout from 90s to 150s, preserving deterministic transcript checks while allowing slower OVMF/TCG boots to finish.
+- Next slice: model scheduler wait-channel contention aging under repeated timer wake retries and deterministic priority inversion recovery contracts.
+
 - Completed slice: fixed smoke timeout pressure by moving the new scheduler debt-aging transcript emission earlier in the UEFI boot transcript so CI can validate the new contract before long-tail firmware runtime stalls.
 - Completed slice: modeled scheduler debt aging decay across timer handoffs with deterministic repayment-cap reset contracts and integrated kernel/UEFI/smoke coverage for the new `scheduler debt aging` line.
 - Next slice: model scheduler wait-channel contention aging under repeated timer wake retries and deterministic priority inversion recovery contracts.
