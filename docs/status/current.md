@@ -90,7 +90,8 @@
 - Completed slice: added deterministic per-thread lifecycle transition modeling (ready/running/blocked/terminated) wired into scheduler runnable-state bookkeeping, then integrated canonical blocked/ready transcript contracts across kernel, UEFI flow, and smoke checks.
 - Completed slice: modeled deterministic scheduler edge-case contracts for blocked-selected fallback and terminated-task dequeue rejection, added canonical thread-state-terminated plus scheduler-edge transcript lines, and integrated them through kernel/UEFI/smoke validation paths.
 - Completed slice: hardened UEFI dequeue transcript emission with a deterministic reseed+retry fallback so `thread dequeue` still gets emitted even if prior edge-case probes perturb scheduler model state during firmware execution.
-- Next slice: model scheduler wait-channel ownership accounting and deterministic timeout wake-deadline contracts.
+- Completed slice: fixed the latest CI smoke timeout failure by making COM1 TX-ready polling fail open after the deterministic bounded spin budget is exceeded once, preventing per-byte stall amplification that could drop late transcript lines (including `thread ctx meta`) before timeout.
+- Next slice: model scheduler preemption debt repayment and deterministic starvation backoff contracts.
 
 <!-- ci-status:start -->
 ## Latest CI automation
