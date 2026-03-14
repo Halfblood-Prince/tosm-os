@@ -15,6 +15,10 @@
 
 ## Progress update
 
+- Completed slice: modeled scheduler time-slice carryover accounting with deterministic preemption-threshold contracts (selected task, carry ticks, threshold crossing, preempt/non-preempt next-task selection) in the kernel scheduler model.
+- Completed slice: integrated canonical scheduler-carryover transcript emission into UEFI boot flow and expanded kernel/UEFI/smoke contract coverage so source/runtime checks enforce the new carryover line.
+- Next slice: model scheduler preemption debt repayment and deterministic starvation backoff contracts.
+
 - Completed slice: modeled scheduler runnable-queue aging decay/rebalance contracts with deterministic floor-boost behavior (`winner age after decay/rebalance`, accumulated decay) and explicit error handling for duplicate participants or zero floor age.
 - Completed slice: integrated canonical scheduler-rebalance transcript emission into UEFI boot flow and expanded kernel/UEFI/smoke contract coverage to require the new runnable-aging line.
 - Next slice: model scheduler time-slice carryover accounting and deterministic preemption-threshold contracts.
