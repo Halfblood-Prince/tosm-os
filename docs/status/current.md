@@ -15,6 +15,10 @@
 
 ## Progress update
 
+- Completed slice: modeled scheduler preemption-debt repayment and deterministic starvation backoff contracts (`debt/repaid/starve/backoff/next`) in the kernel scheduler model.
+- Completed slice: integrated canonical scheduler-debt transcript emission into UEFI boot flow and expanded kernel/UEFI/smoke contract coverage so source/runtime checks enforce the new debt line.
+- Next slice: model scheduler debt aging decay across successive timer handoffs and deterministic repayment-cap reset contracts.
+
 - Completed slice: hardened UEFI wake transcript emission with a deterministic scheduler reseed + blocked-state retry path so `thread state ready`/wake lines still emit when prior probes perturb lifecycle state on slower QEMU firmware runs.
 - Completed slice: prioritized the latest CI smoke failure by fixing the smallest concrete missing line (`thread-state-ready`) without adding new milestone scope.
 - Next slice: model scheduler preemption debt repayment and deterministic starvation backoff contracts.
