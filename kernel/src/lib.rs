@@ -130,6 +130,10 @@ pub const BOOT_SCHEDULER_REBALANCE_LINE: &str =
 pub const BOOT_SCHEDULER_CARRYOVER_LINE: &str =
     "tosm-os: scheduler carryover task=2 rem=2 carry=1 thresh=3 preempt=0 next=2\r\n";
 
+/// Canonical scheduler debt line emitted after preemption-debt repayment + starvation backoff modeling.
+pub const BOOT_SCHEDULER_DEBT_LINE: &str =
+    "tosm-os: scheduler debt task=2 debt=3 repaid=2 starve=4 backoff=1 next=3\r\n";
+
 /// Canonical thread-state-terminated line emitted when a worker lifecycle is cleaned up.
 pub const BOOT_THREAD_STATE_TERMINATED_LINE: &str =
     "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n";
@@ -338,6 +342,12 @@ pub const fn boot_scheduler_rebalance_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_scheduler_carryover_line_bytes() -> &'static [u8] {
     BOOT_SCHEDULER_CARRYOVER_LINE.as_bytes()
+}
+
+/// Returns the canonical scheduler debt line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_scheduler_debt_line_bytes() -> &'static [u8] {
+    BOOT_SCHEDULER_DEBT_LINE.as_bytes()
 }
 
 /// Returns the canonical thread-state-terminated line (including CRLF) for serial writers.
@@ -806,6 +816,26 @@ pub struct EarlySchedulerCarryoverReport {
     pub next_task_id: u32,
 }
 
+/// Deterministic scheduler debt slot metadata used for preemption debt repayment modeling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerDebtSlot {
+    pub task_id: u32,
+    pub preemption_debt: u8,
+    pub starvation_score: u8,
+    pub backoff_budget: u8,
+}
+
+/// Deterministic scheduler debt report for debt repayment and starvation backoff contracts.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerDebtReport {
+    pub selected_task_id: u32,
+    pub selected_debt_before: u8,
+    pub selected_debt_repaid: u8,
+    pub selected_starvation_score: u8,
+    pub selected_backoff_applied: u8,
+    pub next_task_id: u32,
+}
+
 /// Errors returned by deterministic thread lifecycle transition helpers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EarlyThreadLifecycleError {
@@ -847,6 +877,13 @@ pub enum EarlySchedulerRebalanceError {
 pub enum EarlySchedulerCarryoverError {
     DuplicateTask,
     ZeroThreshold,
+    SelectedTaskNotFound,
+}
+
+/// Errors returned by deterministic scheduler debt repayment + starvation-backoff modeling helpers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlySchedulerDebtError {
+    DuplicateTask,
     SelectedTaskNotFound,
 }
 
@@ -2231,6 +2268,67 @@ pub fn model_early_scheduler_timeslice_carryover(
         selected_carry_ticks: selected.carry_ticks,
         preemption_threshold,
         preempted,
+        next_task_id,
+    })
+}
+
+/// Models scheduler preemption-debt repayment and deterministic starvation backoff rotation.
+pub fn model_early_scheduler_preemption_debt(
+    slots: [EarlySchedulerDebtSlot; 3],
+    selected_task_id: u32,
+) -> Result<EarlySchedulerDebtReport, EarlySchedulerDebtError> {
+    if slots[0].task_id == slots[1].task_id
+        || slots[0].task_id == slots[2].task_id
+        || slots[1].task_id == slots[2].task_id
+    {
+        return Err(EarlySchedulerDebtError::DuplicateTask);
+    }
+
+    let mut selected_index = None;
+    let mut index = 0usize;
+    while index < slots.len() {
+        if slots[index].task_id == selected_task_id {
+            selected_index = Some(index);
+            break;
+        }
+        index += 1;
+    }
+
+    let Some(selected_index) = selected_index else {
+        return Err(EarlySchedulerDebtError::SelectedTaskNotFound);
+    };
+
+    let selected = slots[selected_index];
+    let selected_debt_repaid = selected.preemption_debt.min(2);
+    let selected_backoff_applied = if selected.preemption_debt > selected_debt_repaid {
+        selected.backoff_budget.min(1)
+    } else {
+        0
+    };
+
+    let mut next_task_id = selected.task_id;
+    let mut best_starvation_score = selected.starvation_score;
+    let mut fallback_index = 0usize;
+    while fallback_index < slots.len() {
+        if fallback_index != selected_index {
+            let candidate = slots[fallback_index];
+            if candidate.starvation_score > best_starvation_score
+                || (candidate.starvation_score == best_starvation_score
+                    && candidate.task_id < next_task_id)
+            {
+                best_starvation_score = candidate.starvation_score;
+                next_task_id = candidate.task_id;
+            }
+        }
+        fallback_index += 1;
+    }
+
+    Ok(EarlySchedulerDebtReport {
+        selected_task_id: selected.task_id,
+        selected_debt_before: selected.preemption_debt,
+        selected_debt_repaid,
+        selected_starvation_score: selected.starvation_score,
+        selected_backoff_applied,
         next_task_id,
     })
 }
@@ -4097,6 +4195,99 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_preemption_debt_model_reports_repayment_and_starvation_backoff() {
+        let report = super::model_early_scheduler_preemption_debt(
+            [
+                super::EarlySchedulerDebtSlot {
+                    task_id: 2,
+                    preemption_debt: 3,
+                    starvation_score: 4,
+                    backoff_budget: 1,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 3,
+                    preemption_debt: 0,
+                    starvation_score: 7,
+                    backoff_budget: 0,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 4,
+                    preemption_debt: 1,
+                    starvation_score: 5,
+                    backoff_budget: 1,
+                },
+            ],
+            2,
+        )
+        .expect("debt model should report deterministic repayment + backoff");
+
+        assert_eq!(report.selected_task_id, 2);
+        assert_eq!(report.selected_debt_before, 3);
+        assert_eq!(report.selected_debt_repaid, 2);
+        assert_eq!(report.selected_starvation_score, 4);
+        assert_eq!(report.selected_backoff_applied, 1);
+        assert_eq!(report.next_task_id, 3);
+    }
+
+    #[test]
+    fn scheduler_preemption_debt_model_rejects_duplicate_and_unknown_selected() {
+        let duplicate = super::model_early_scheduler_preemption_debt(
+            [
+                super::EarlySchedulerDebtSlot {
+                    task_id: 2,
+                    preemption_debt: 3,
+                    starvation_score: 4,
+                    backoff_budget: 1,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 2,
+                    preemption_debt: 0,
+                    starvation_score: 7,
+                    backoff_budget: 0,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 4,
+                    preemption_debt: 1,
+                    starvation_score: 5,
+                    backoff_budget: 1,
+                },
+            ],
+            2,
+        )
+        .expect_err("debt model should reject duplicate task ids");
+        assert_eq!(duplicate, super::EarlySchedulerDebtError::DuplicateTask);
+
+        let not_found = super::model_early_scheduler_preemption_debt(
+            [
+                super::EarlySchedulerDebtSlot {
+                    task_id: 2,
+                    preemption_debt: 3,
+                    starvation_score: 4,
+                    backoff_budget: 1,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 3,
+                    preemption_debt: 0,
+                    starvation_score: 7,
+                    backoff_budget: 0,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 4,
+                    preemption_debt: 1,
+                    starvation_score: 5,
+                    backoff_budget: 1,
+                },
+            ],
+            5,
+        )
+        .expect_err("debt model should reject unknown selected task id");
+        assert_eq!(
+            not_found,
+            super::EarlySchedulerDebtError::SelectedTaskNotFound
+        );
+    }
+
+    #[test]
     fn wake_timeout_and_wait_owner_lines_include_crlf() {
         assert_eq!(
             BOOT_THREAD_WAIT_OWNERSHIP_LINE,
@@ -4145,6 +4336,14 @@ mod tests {
         assert_eq!(
             super::boot_scheduler_carryover_line_bytes(),
             b"tosm-os: scheduler carryover task=2 rem=2 carry=1 thresh=3 preempt=0 next=2\r\n"
+        );
+        assert_eq!(
+            super::BOOT_SCHEDULER_DEBT_LINE,
+            "tosm-os: scheduler debt task=2 debt=3 repaid=2 starve=4 backoff=1 next=3\r\n"
+        );
+        assert_eq!(
+            super::boot_scheduler_debt_line_bytes(),
+            b"tosm-os: scheduler debt task=2 debt=3 repaid=2 starve=4 backoff=1 next=3\r\n"
         );
     }
 
