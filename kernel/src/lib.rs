@@ -122,6 +122,10 @@ pub const BOOT_THREAD_WAKE_ORDER_LINE: &str =
 pub const BOOT_THREAD_WAKE_FAIRNESS_LINE: &str =
     "tosm-os: thread wake fairness first=4 wait=0x5000 age=5 second=3 age=3 rotate=1\r\n";
 
+/// Canonical scheduler-rebalance line emitted after runnable aging decay + floor rebalance.
+pub const BOOT_SCHEDULER_REBALANCE_LINE: &str =
+    "tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1\r\n";
+
 /// Canonical thread-state-terminated line emitted when a worker lifecycle is cleaned up.
 pub const BOOT_THREAD_STATE_TERMINATED_LINE: &str =
     "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n";
@@ -318,6 +322,12 @@ pub const fn boot_thread_wake_order_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_thread_wake_fairness_line_bytes() -> &'static [u8] {
     BOOT_THREAD_WAKE_FAIRNESS_LINE.as_bytes()
+}
+
+/// Returns the canonical scheduler rebalance line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_scheduler_rebalance_line_bytes() -> &'static [u8] {
+    BOOT_SCHEDULER_REBALANCE_LINE.as_bytes()
 }
 
 /// Returns the canonical thread-state-terminated line (including CRLF) for serial writers.
@@ -748,6 +758,25 @@ pub struct EarlyThreadWakeFairnessReport {
     pub starvation_prevented: bool,
 }
 
+/// Deterministic runnable-aging slot metadata used for decay/rebalance modeling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerAgingSlot {
+    pub task_id: u32,
+    pub age: u8,
+    pub decay: u8,
+}
+
+/// Deterministic runnable-aging report for decay and rebalance contracts.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerRebalanceReport {
+    pub winner_task_id: u32,
+    pub winner_age_after_decay: u8,
+    pub winner_age_after_rebalance: u8,
+    pub floor_age: u8,
+    pub boost_applied: u8,
+    pub total_decay_applied: u16,
+}
+
 /// Errors returned by deterministic thread lifecycle transition helpers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EarlyThreadLifecycleError {
@@ -775,6 +804,13 @@ pub enum EarlyThreadWakeContentionError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EarlyThreadWakeFairnessError {
     DuplicateTask,
+}
+
+/// Errors returned by deterministic runnable-aging decay/rebalance modeling helpers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlySchedulerRebalanceError {
+    DuplicateTask,
+    ZeroFloorAge,
 }
 
 /// Errors returned by deterministic scheduler slot-mutation helpers.
@@ -2054,6 +2090,52 @@ pub fn resolve_early_multi_channel_wake_fairness(
         second_age: second.channel_age,
         rotation_applied: true,
         starvation_prevented,
+    })
+}
+
+/// Applies deterministic runnable-aging decay and floor-based rebalance for queue fairness.
+pub fn rebalance_early_scheduler_runnable_aging(
+    slots: [EarlySchedulerAgingSlot; 3],
+    floor_age: u8,
+) -> Result<EarlySchedulerRebalanceReport, EarlySchedulerRebalanceError> {
+    if floor_age == 0 {
+        return Err(EarlySchedulerRebalanceError::ZeroFloorAge);
+    }
+
+    if slots[0].task_id == slots[1].task_id
+        || slots[0].task_id == slots[2].task_id
+        || slots[1].task_id == slots[2].task_id
+    {
+        return Err(EarlySchedulerRebalanceError::DuplicateTask);
+    }
+
+    let mut best_index = 0usize;
+    let mut best_age_after_decay = slots[0].age.saturating_sub(slots[0].decay);
+    let mut total_decay_applied = slots[0].decay as u16;
+
+    let mut index = 1usize;
+    while index < slots.len() {
+        let candidate_age_after_decay = slots[index].age.saturating_sub(slots[index].decay);
+        total_decay_applied = total_decay_applied.saturating_add(slots[index].decay as u16);
+        if candidate_age_after_decay > best_age_after_decay
+            || (candidate_age_after_decay == best_age_after_decay
+                && slots[index].task_id < slots[best_index].task_id)
+        {
+            best_index = index;
+            best_age_after_decay = candidate_age_after_decay;
+        }
+        index += 1;
+    }
+
+    let boost_applied = floor_age.saturating_sub(best_age_after_decay);
+
+    Ok(EarlySchedulerRebalanceReport {
+        winner_task_id: slots[best_index].task_id,
+        winner_age_after_decay: best_age_after_decay,
+        winner_age_after_rebalance: best_age_after_decay.saturating_add(boost_applied),
+        floor_age,
+        boost_applied,
+        total_decay_applied,
     })
 }
 
@@ -3654,6 +3736,125 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_runnable_aging_rebalance_prefers_highest_decayed_age() {
+        let report = super::rebalance_early_scheduler_runnable_aging(
+            [
+                super::EarlySchedulerAgingSlot {
+                    task_id: 2,
+                    age: 7,
+                    decay: 3,
+                },
+                super::EarlySchedulerAgingSlot {
+                    task_id: 3,
+                    age: 5,
+                    decay: 3,
+                },
+                super::EarlySchedulerAgingSlot {
+                    task_id: 4,
+                    age: 4,
+                    decay: 2,
+                },
+            ],
+            4,
+        )
+        .expect("rebalance should resolve deterministic aging slots");
+
+        assert_eq!(report.winner_task_id, 2);
+        assert_eq!(report.winner_age_after_decay, 4);
+        assert_eq!(report.winner_age_after_rebalance, 4);
+        assert_eq!(report.floor_age, 4);
+        assert_eq!(report.boost_applied, 0);
+        assert_eq!(report.total_decay_applied, 8);
+    }
+
+    #[test]
+    fn scheduler_runnable_aging_rebalance_applies_floor_boost() {
+        let report = super::rebalance_early_scheduler_runnable_aging(
+            [
+                super::EarlySchedulerAgingSlot {
+                    task_id: 2,
+                    age: 4,
+                    decay: 3,
+                },
+                super::EarlySchedulerAgingSlot {
+                    task_id: 3,
+                    age: 3,
+                    decay: 2,
+                },
+                super::EarlySchedulerAgingSlot {
+                    task_id: 4,
+                    age: 2,
+                    decay: 1,
+                },
+            ],
+            4,
+        )
+        .expect("rebalance should apply floor boost to oldest decayed slot");
+
+        assert_eq!(report.winner_task_id, 2);
+        assert_eq!(report.winner_age_after_decay, 1);
+        assert_eq!(report.winner_age_after_rebalance, 4);
+        assert_eq!(report.floor_age, 4);
+        assert_eq!(report.boost_applied, 3);
+        assert_eq!(report.total_decay_applied, 6);
+    }
+
+    #[test]
+    fn scheduler_runnable_aging_rebalance_rejects_duplicate_tasks_and_zero_floor() {
+        let duplicate = super::rebalance_early_scheduler_runnable_aging(
+            [
+                super::EarlySchedulerAgingSlot {
+                    task_id: 2,
+                    age: 7,
+                    decay: 3,
+                },
+                super::EarlySchedulerAgingSlot {
+                    task_id: 2,
+                    age: 6,
+                    decay: 3,
+                },
+                super::EarlySchedulerAgingSlot {
+                    task_id: 4,
+                    age: 5,
+                    decay: 1,
+                },
+            ],
+            4,
+        )
+        .expect_err("duplicate task ids should be rejected");
+        assert_eq!(
+            duplicate,
+            super::EarlySchedulerRebalanceError::DuplicateTask
+        );
+
+        let zero_floor = super::rebalance_early_scheduler_runnable_aging(
+            [
+                super::EarlySchedulerAgingSlot {
+                    task_id: 2,
+                    age: 7,
+                    decay: 3,
+                },
+                super::EarlySchedulerAgingSlot {
+                    task_id: 3,
+                    age: 6,
+                    decay: 3,
+                },
+                super::EarlySchedulerAgingSlot {
+                    task_id: 4,
+                    age: 5,
+                    decay: 1,
+                },
+            ],
+            0,
+        )
+        .expect_err("zero floor age should be rejected");
+        assert_eq!(
+            zero_floor,
+            super::EarlySchedulerRebalanceError::ZeroFloorAge
+        );
+    }
+
+    #[test]
     fn wake_timeout_and_wait_owner_lines_include_crlf() {
         assert_eq!(
             BOOT_THREAD_WAIT_OWNERSHIP_LINE,
@@ -3686,6 +3887,14 @@ mod tests {
         assert_eq!(
             boot_thread_wake_order_line_bytes(),
             b"tosm-os: thread wake order first=3 second=2 wait=0x3000 claims=2,3\r\n"
+        );
+        assert_eq!(
+            super::BOOT_SCHEDULER_REBALANCE_LINE,
+            "tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1\r\n"
+        );
+        assert_eq!(
+            super::boot_scheduler_rebalance_line_bytes(),
+            b"tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1\r\n"
         );
     }
 

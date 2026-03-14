@@ -33,6 +33,7 @@ expected_thread_wake_timeout='tosm-os: thread wake timeout task=2 deadline=3 now
 expected_thread_wait_contention='tosm-os: thread wait contend wait=0x3000 winner=3 loser=2 pri=signal>timer'
 expected_thread_wake_order='tosm-os: thread wake order first=3 second=2 wait=0x3000 claims=2,3'
 expected_thread_wake_fairness='tosm-os: thread wake fairness first=4 wait=0x5000 age=5 second=3 age=3 rotate=1'
+expected_scheduler_rebalance='tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1'
 expected_thread_state_terminated='tosm-os: thread state task=2 ready->terminated runq=1 selected=0'
 expected_scheduler_edge_blocked='tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0'
 expected_scheduler_edge_terminated='tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0'
@@ -66,6 +67,7 @@ expected_thread_wake_timeout_line='tosm-os: thread wake timeout task=2 deadline=
 expected_thread_wait_contention_line='tosm-os: thread wait contend wait=0x3000 winner=3 loser=2 pri=signal>timer\r\n'
 expected_thread_wake_order_line='tosm-os: thread wake order first=3 second=2 wait=0x3000 claims=2,3\r\n'
 expected_thread_wake_fairness_line='tosm-os: thread wake fairness first=4 wait=0x5000 age=5 second=3 age=3 rotate=1\r\n'
+expected_scheduler_rebalance_line='tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1\r\n'
 expected_thread_state_terminated_line='tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n'
 expected_scheduler_edge_blocked_line='tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0\r\n'
 expected_scheduler_edge_terminated_line='tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0\r\n'
@@ -214,6 +216,11 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_thread_wake_fairness}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected thread-wake-fairness line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_rebalance}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected scheduler-rebalance line not found"
     exit 1
   fi
 
@@ -389,6 +396,11 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_thread_wake_fairness_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected thread-wake-fairness CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_rebalance_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected scheduler-rebalance CRLF contract not found"
     exit 1
   fi
 
@@ -775,6 +787,11 @@ run_qemu_smoke() {
 
   if ! grep --fixed-strings --quiet -- "${expected_thread_wake_fairness}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing thread-wake-fairness line"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_rebalance}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing scheduler-rebalance line"
     exit 1
   fi
 
