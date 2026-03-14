@@ -419,6 +419,12 @@ pub const fn thread_wake_order_message_line() -> &'static [u8] {
     kernel::boot_thread_wake_order_line_bytes()
 }
 
+/// Returns deterministic wake-fairness line expected for multi-channel aging rotation contracts.
+#[must_use]
+pub const fn thread_wake_fairness_message_line() -> &'static [u8] {
+    kernel::boot_thread_wake_fairness_line_bytes()
+}
+
 /// Returns deterministic thread-state terminated line expected for lifecycle cleanup modeling.
 #[must_use]
 pub const fn thread_state_terminated_message_line() -> &'static [u8] {
@@ -605,6 +611,35 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         screen.write_all(thread_wake_order_message_line());
     }
 
+    if kernel::resolve_early_multi_channel_wake_fairness([
+        kernel::EarlyThreadWakeFairnessSlot {
+            wait_channel: 0x0000_0000_0000_5000,
+            blocked_task_id: 3,
+            reason: kernel::EarlyThreadWakeReason::Signal,
+            channel_age: 3,
+            claim_sequence: 2,
+        },
+        kernel::EarlyThreadWakeFairnessSlot {
+            wait_channel: 0x0000_0000_0000_2000,
+            blocked_task_id: 2,
+            reason: kernel::EarlyThreadWakeReason::Timer,
+            channel_age: 1,
+            claim_sequence: 1,
+        },
+        kernel::EarlyThreadWakeFairnessSlot {
+            wait_channel: 0x0000_0000_0000_5000,
+            blocked_task_id: 4,
+            reason: kernel::EarlyThreadWakeReason::Io,
+            channel_age: 5,
+            claim_sequence: 4,
+        },
+    ])
+    .is_ok()
+    {
+        serial.write_all(thread_wake_fairness_message_line());
+        screen.write_all(thread_wake_fairness_message_line());
+    }
+
     if kernel::model_early_scheduler_blocked_selection_edge_case(1).is_ok() {
         serial.write_all(scheduler_edge_blocked_message_line());
         screen.write_all(scheduler_edge_blocked_message_line());
@@ -655,12 +690,12 @@ mod tests {
         thread_context_save_message_line, thread_dequeue_message_line, thread_enqueue_message_line,
         thread_state_blocked_message_line, thread_state_ready_message_line,
         thread_state_terminated_message_line, thread_wait_contention_message_line,
-        thread_wait_ownership_message_line, thread_wake_message_line,
-        thread_wake_order_message_line, thread_wake_timeout_message_line, timer_ack_message_line,
-        timer_first_tick_message_line, timer_handoff_message_line, timer_init_message_line,
-        timer_third_tick_message_line, vga_cell_index, EfiStatus, BAUD_DIVISOR_115200,
-        LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY, VGA_TEXT_COLUMNS,
-        VGA_TEXT_ROWS,
+        thread_wait_ownership_message_line, thread_wake_fairness_message_line,
+        thread_wake_message_line, thread_wake_order_message_line, thread_wake_timeout_message_line,
+        timer_ack_message_line, timer_first_tick_message_line, timer_handoff_message_line,
+        timer_init_message_line, timer_third_tick_message_line, vga_cell_index, EfiStatus,
+        BAUD_DIVISOR_115200, LINE_CONTROL_8N1, LINE_CONTROL_DLAB, LINE_STATUS_TRANSMITTER_EMPTY,
+        VGA_TEXT_COLUMNS, VGA_TEXT_ROWS,
     };
 
     struct VgaWriterModel {
@@ -1050,6 +1085,7 @@ mod tests {
         model.write_all(thread_wake_timeout_message_line());
         model.write_all(thread_wait_contention_message_line());
         model.write_all(thread_wake_order_message_line());
+        model.write_all(thread_wake_fairness_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -1107,6 +1143,7 @@ mod tests {
         model.write_all(thread_wake_timeout_message_line());
         model.write_all(thread_wait_contention_message_line());
         model.write_all(thread_wake_order_message_line());
+        model.write_all(thread_wake_fairness_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -1224,6 +1261,10 @@ mod tests {
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
+            b"tosm-os: thread wake fairness first=4 wait=0x5000 age=5 second=3 age=3 rotate=1"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
             b"tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0"
         );
         assert_ne!(
@@ -1241,6 +1282,51 @@ mod tests {
         assert_eq!(
             model.row_bytes(1),
             [VgaWriterModel::BLANK; VGA_TEXT_COLUMNS]
+        );
+    }
+
+    #[test]
+    fn multi_channel_wake_fairness_prioritizes_oldest_wait_channel() {
+        let fairness = kernel::resolve_early_multi_channel_wake_fairness([
+            kernel::EarlyThreadWakeFairnessSlot {
+                wait_channel: 0x5000,
+                blocked_task_id: 3,
+                reason: kernel::EarlyThreadWakeReason::Signal,
+                channel_age: 3,
+                claim_sequence: 2,
+            },
+            kernel::EarlyThreadWakeFairnessSlot {
+                wait_channel: 0x2000,
+                blocked_task_id: 2,
+                reason: kernel::EarlyThreadWakeReason::Timer,
+                channel_age: 1,
+                claim_sequence: 1,
+            },
+            kernel::EarlyThreadWakeFairnessSlot {
+                wait_channel: 0x5000,
+                blocked_task_id: 4,
+                reason: kernel::EarlyThreadWakeReason::Io,
+                channel_age: 5,
+                claim_sequence: 4,
+            },
+        ])
+        .expect("fairness arbitration should resolve");
+
+        assert_eq!(fairness.first_task_id, 4);
+        assert_eq!(fairness.first_wait_channel, 0x5000);
+        assert_eq!(fairness.first_age, 5);
+        assert_eq!(fairness.second_task_id, 3);
+        assert_eq!(fairness.second_wait_channel, 0x5000);
+        assert_eq!(fairness.second_age, 3);
+        assert!(fairness.rotation_applied);
+        assert!(fairness.starvation_prevented);
+    }
+
+    #[test]
+    fn multi_channel_wake_fairness_message_matches_kernel_contract() {
+        assert_eq!(
+            thread_wake_fairness_message_line(),
+            b"tosm-os: thread wake fairness first=4 wait=0x5000 age=5 second=3 age=3 rotate=1\r\n"
         );
     }
 

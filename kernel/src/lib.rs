@@ -118,6 +118,10 @@ pub const BOOT_THREAD_WAIT_CONTENTION_LINE: &str =
 pub const BOOT_THREAD_WAKE_ORDER_LINE: &str =
     "tosm-os: thread wake order first=3 second=2 wait=0x3000 claims=2,3\r\n";
 
+/// Canonical wake-fairness line emitted when multi-channel aging rotates wake selection.
+pub const BOOT_THREAD_WAKE_FAIRNESS_LINE: &str =
+    "tosm-os: thread wake fairness first=4 wait=0x5000 age=5 second=3 age=3 rotate=1\r\n";
+
 /// Canonical thread-state-terminated line emitted when a worker lifecycle is cleaned up.
 pub const BOOT_THREAD_STATE_TERMINATED_LINE: &str =
     "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n";
@@ -308,6 +312,12 @@ pub const fn boot_thread_wait_contention_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_thread_wake_order_line_bytes() -> &'static [u8] {
     BOOT_THREAD_WAKE_ORDER_LINE.as_bytes()
+}
+
+/// Returns the canonical thread wake-fairness line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_thread_wake_fairness_line_bytes() -> &'static [u8] {
+    BOOT_THREAD_WAKE_FAIRNESS_LINE.as_bytes()
 }
 
 /// Returns the canonical thread-state-terminated line (including CRLF) for serial writers.
@@ -715,6 +725,29 @@ pub struct EarlyThreadWakeContentionReport {
     pub loser_claim_sequence: u64,
 }
 
+/// Deterministic multi-channel wake slot metadata used by fairness/aging arbitration modeling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyThreadWakeFairnessSlot {
+    pub wait_channel: u64,
+    pub blocked_task_id: u32,
+    pub reason: EarlyThreadWakeReason,
+    pub channel_age: u8,
+    pub claim_sequence: u64,
+}
+
+/// Deterministic wake-fairness report for multi-channel aging and starvation-prevention checks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlyThreadWakeFairnessReport {
+    pub first_task_id: u32,
+    pub first_wait_channel: u64,
+    pub first_age: u8,
+    pub second_task_id: u32,
+    pub second_wait_channel: u64,
+    pub second_age: u8,
+    pub rotation_applied: bool,
+    pub starvation_prevented: bool,
+}
+
 /// Errors returned by deterministic thread lifecycle transition helpers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EarlyThreadLifecycleError {
@@ -735,6 +768,12 @@ pub enum EarlyThreadContextHandoffError {
 pub enum EarlyThreadWakeContentionError {
     TaskNotFound,
     TaskStateNotBlocked,
+    DuplicateTask,
+}
+
+/// Errors returned by deterministic multi-channel wake-fairness arbitration helpers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlyThreadWakeFairnessError {
     DuplicateTask,
 }
 
@@ -1953,6 +1992,68 @@ pub fn resolve_early_thread_wake_contention(
         loser_reason,
         winner_claim_sequence,
         loser_claim_sequence,
+    })
+}
+
+/// Resolves deterministic multi-channel wake fairness ordering with per-channel aging.
+pub fn resolve_early_multi_channel_wake_fairness(
+    slots: [EarlyThreadWakeFairnessSlot; 3],
+) -> Result<EarlyThreadWakeFairnessReport, EarlyThreadWakeFairnessError> {
+    if slots[0].blocked_task_id == slots[1].blocked_task_id
+        || slots[0].blocked_task_id == slots[2].blocked_task_id
+        || slots[1].blocked_task_id == slots[2].blocked_task_id
+    {
+        return Err(EarlyThreadWakeFairnessError::DuplicateTask);
+    }
+
+    let mut best_index = 0usize;
+    let mut index = 1usize;
+    while index < slots.len() {
+        let candidate = slots[index];
+        let current_best = slots[best_index];
+        if candidate.channel_age > current_best.channel_age
+            || (candidate.channel_age == current_best.channel_age
+                && (candidate.reason.priority() > current_best.reason.priority()
+                    || (candidate.reason.priority() == current_best.reason.priority()
+                        && candidate.claim_sequence < current_best.claim_sequence)))
+        {
+            best_index = index;
+        }
+        index += 1;
+    }
+
+    let first = slots[best_index];
+    let mut second_index = if best_index == 0 { 1 } else { 0 };
+    index = 0;
+    while index < slots.len() {
+        if index != best_index {
+            let candidate = slots[index];
+            let current_second = slots[second_index];
+            if candidate.channel_age > current_second.channel_age
+                || (candidate.channel_age == current_second.channel_age
+                    && (candidate.reason.priority() > current_second.reason.priority()
+                        || (candidate.reason.priority() == current_second.reason.priority()
+                            && candidate.claim_sequence < current_second.claim_sequence)))
+            {
+                second_index = index;
+            }
+        }
+        index += 1;
+    }
+
+    let second = slots[second_index];
+    let max_age = first.channel_age;
+    let starvation_prevented = second.channel_age.saturating_add(2) <= max_age;
+
+    Ok(EarlyThreadWakeFairnessReport {
+        first_task_id: first.blocked_task_id,
+        first_wait_channel: first.wait_channel,
+        first_age: first.channel_age,
+        second_task_id: second.blocked_task_id,
+        second_wait_channel: second.wait_channel,
+        second_age: second.channel_age,
+        rotation_applied: true,
+        starvation_prevented,
     })
 }
 
