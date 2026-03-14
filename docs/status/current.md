@@ -15,6 +15,10 @@
 
 ## Progress update
 
+- Completed slice: modeled scheduler runnable-queue aging decay/rebalance contracts with deterministic floor-boost behavior (`winner age after decay/rebalance`, accumulated decay) and explicit error handling for duplicate participants or zero floor age.
+- Completed slice: integrated canonical scheduler-rebalance transcript emission into UEFI boot flow and expanded kernel/UEFI/smoke contract coverage to require the new runnable-aging line.
+- Next slice: model scheduler time-slice carryover accounting and deterministic preemption-threshold contracts.
+
 - Completed slice: modeled deterministic multi-channel wake fairness rotation with per-channel aging metadata in the kernel scheduler wake path, including starvation-prevention arbitration contracts and duplicate-participant rejection.
 - Completed slice: integrated canonical wake-fairness transcript emission into the UEFI boot flow and expanded kernel/UEFI/smoke contract coverage so source/runtime checks require the new aging-rotation line.
 - Next slice: model scheduler runnable-queue aging decay/rebalance contracts after fairness-based wake selection.

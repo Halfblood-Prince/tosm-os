@@ -425,6 +425,12 @@ pub const fn thread_wake_fairness_message_line() -> &'static [u8] {
     kernel::boot_thread_wake_fairness_line_bytes()
 }
 
+/// Returns deterministic scheduler rebalance line expected for runnable-aging decay contracts.
+#[must_use]
+pub const fn scheduler_rebalance_message_line() -> &'static [u8] {
+    kernel::boot_scheduler_rebalance_line_bytes()
+}
+
 /// Returns deterministic thread-state terminated line expected for lifecycle cleanup modeling.
 #[must_use]
 pub const fn thread_state_terminated_message_line() -> &'static [u8] {
@@ -638,6 +644,32 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
     {
         serial.write_all(thread_wake_fairness_message_line());
         screen.write_all(thread_wake_fairness_message_line());
+    }
+
+    if kernel::rebalance_early_scheduler_runnable_aging(
+        [
+            kernel::EarlySchedulerAgingSlot {
+                task_id: 2,
+                age: 7,
+                decay: 3,
+            },
+            kernel::EarlySchedulerAgingSlot {
+                task_id: 3,
+                age: 5,
+                decay: 3,
+            },
+            kernel::EarlySchedulerAgingSlot {
+                task_id: 4,
+                age: 4,
+                decay: 2,
+            },
+        ],
+        4,
+    )
+    .is_ok()
+    {
+        serial.write_all(scheduler_rebalance_message_line());
+        screen.write_all(scheduler_rebalance_message_line());
     }
 
     if kernel::model_early_scheduler_blocked_selection_edge_case(1).is_ok() {
@@ -1086,6 +1118,7 @@ mod tests {
         model.write_all(thread_wait_contention_message_line());
         model.write_all(thread_wake_order_message_line());
         model.write_all(thread_wake_fairness_message_line());
+        model.write_all(super::scheduler_rebalance_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -1107,6 +1140,9 @@ mod tests {
         ));
         assert!(has_line(
             b"tosm-os: thread wake task=2 reason=timer wait=0x2000 runq=3 sel=1"
+        ));
+        assert!(has_line(
+            b"tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1"
         ));
         assert!(has_line(
             b"tosm-os: thread state task=2 ready->terminated runq=1 selected=0"
@@ -1144,6 +1180,7 @@ mod tests {
         model.write_all(thread_wait_contention_message_line());
         model.write_all(thread_wake_order_message_line());
         model.write_all(thread_wake_fairness_message_line());
+        model.write_all(super::scheduler_rebalance_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -1265,6 +1302,10 @@ mod tests {
         );
         assert_ne!(
             model.row_text_without_trailing_blanks(0),
+            b"tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1"
+        );
+        assert_ne!(
+            model.row_text_without_trailing_blanks(0),
             b"tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0"
         );
         assert_ne!(
@@ -1328,6 +1369,46 @@ mod tests {
             thread_wake_fairness_message_line(),
             b"tosm-os: thread wake fairness first=4 wait=0x5000 age=5 second=3 age=3 rotate=1\r\n"
         );
+    }
+
+    #[test]
+    fn scheduler_rebalance_message_matches_kernel_contract() {
+        assert_eq!(
+            super::scheduler_rebalance_message_line(),
+            b"tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1\r\n"
+        );
+    }
+
+    #[test]
+    fn scheduler_rebalance_model_matches_expected_decay_and_floor() {
+        let report = kernel::rebalance_early_scheduler_runnable_aging(
+            [
+                kernel::EarlySchedulerAgingSlot {
+                    task_id: 2,
+                    age: 7,
+                    decay: 3,
+                },
+                kernel::EarlySchedulerAgingSlot {
+                    task_id: 3,
+                    age: 5,
+                    decay: 3,
+                },
+                kernel::EarlySchedulerAgingSlot {
+                    task_id: 4,
+                    age: 4,
+                    decay: 2,
+                },
+            ],
+            4,
+        )
+        .expect("rebalance should resolve deterministic aging sample");
+
+        assert_eq!(report.winner_task_id, 2);
+        assert_eq!(report.winner_age_after_decay, 4);
+        assert_eq!(report.winner_age_after_rebalance, 4);
+        assert_eq!(report.floor_age, 4);
+        assert_eq!(report.boost_applied, 0);
+        assert_eq!(report.total_decay_applied, 8);
     }
 
     #[test]
