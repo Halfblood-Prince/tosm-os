@@ -454,6 +454,12 @@ pub const fn scheduler_debt_message_line() -> &'static [u8] {
     kernel::boot_scheduler_debt_line_bytes()
 }
 
+/// Returns deterministic scheduler debt-aging line expected for decay/reset contracts.
+#[must_use]
+pub const fn scheduler_debt_aging_message_line() -> &'static [u8] {
+    kernel::boot_scheduler_debt_aging_line_bytes()
+}
+
 /// Returns deterministic thread-state terminated line expected for lifecycle cleanup modeling.
 #[must_use]
 pub const fn thread_state_terminated_message_line() -> &'static [u8] {
@@ -774,6 +780,36 @@ pub fn run_entry(_image: EfiHandle, _system_table: EfiSystemTable) -> EfiStatus 
         screen.write_all(scheduler_debt_message_line());
     }
 
+    if kernel::model_early_scheduler_preemption_debt_aging(
+        [
+            kernel::EarlySchedulerDebtSlot {
+                task_id: 2,
+                preemption_debt: 3,
+                starvation_score: 4,
+                backoff_budget: 1,
+            },
+            kernel::EarlySchedulerDebtSlot {
+                task_id: 3,
+                preemption_debt: 0,
+                starvation_score: 7,
+                backoff_budget: 0,
+            },
+            kernel::EarlySchedulerDebtSlot {
+                task_id: 4,
+                preemption_debt: 1,
+                starvation_score: 5,
+                backoff_budget: 1,
+            },
+        ],
+        2,
+        2,
+    )
+    .is_ok()
+    {
+        serial.write_all(scheduler_debt_aging_message_line());
+        screen.write_all(scheduler_debt_aging_message_line());
+    }
+
     if kernel::model_early_scheduler_blocked_selection_edge_case(1).is_ok() {
         serial.write_all(scheduler_edge_blocked_message_line());
         screen.write_all(scheduler_edge_blocked_message_line());
@@ -818,11 +854,11 @@ mod tests {
         global_allocator_ready_message_line, heap_alloc_cycle_message_line,
         heap_bootstrap_message_line, interrupt_init_message_line, kernel_entry_message_line,
         memory_init_message_line, paging_install_message_line, paging_plan_message_line,
-        panic_message_line, scheduler_carryover_message_line, scheduler_debt_message_line,
-        scheduler_edge_blocked_message_line, scheduler_edge_terminated_message_line,
-        scheduler_handoff_message_line, thread_context_meta_message_line,
-        thread_context_restore_message_line, thread_context_save_message_line,
-        thread_dequeue_message_line, thread_enqueue_message_line,
+        panic_message_line, scheduler_carryover_message_line, scheduler_debt_aging_message_line,
+        scheduler_debt_message_line, scheduler_edge_blocked_message_line,
+        scheduler_edge_terminated_message_line, scheduler_handoff_message_line,
+        thread_context_meta_message_line, thread_context_restore_message_line,
+        thread_context_save_message_line, thread_dequeue_message_line, thread_enqueue_message_line,
         thread_state_blocked_message_line, thread_state_ready_message_line,
         thread_state_terminated_message_line, thread_wait_contention_message_line,
         thread_wait_ownership_message_line, thread_wake_fairness_message_line,
@@ -1083,6 +1119,14 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_debt_aging_message_line_matches_kernel_canonical_line() {
+        assert_eq!(
+            scheduler_debt_aging_message_line(),
+            b"tosm-os: scheduler debt aging task=2 debt=3 decay=2 cap-reset=1 cap=2 next=3\r\n"
+        );
+    }
+
+    #[test]
     fn thread_wake_message_line_matches_kernel_canonical_wake_line() {
         assert_eq!(
             thread_wake_message_line(),
@@ -1224,6 +1268,7 @@ mod tests {
         model.write_all(super::scheduler_rebalance_message_line());
         model.write_all(scheduler_carryover_message_line());
         model.write_all(scheduler_debt_message_line());
+        model.write_all(scheduler_debt_aging_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());
@@ -1254,6 +1299,9 @@ mod tests {
         ));
         assert!(has_line(
             b"tosm-os: scheduler debt task=2 debt=3 repaid=2 starve=4 backoff=1 next=3"
+        ));
+        assert!(has_line(
+            b"tosm-os: scheduler debt aging task=2 debt=3 decay=2 cap-reset=1 cap=2 next=3"
         ));
         assert!(has_line(
             b"tosm-os: thread state task=2 ready->terminated runq=1 selected=0"
@@ -1294,6 +1342,7 @@ mod tests {
         model.write_all(super::scheduler_rebalance_message_line());
         model.write_all(scheduler_carryover_message_line());
         model.write_all(scheduler_debt_message_line());
+        model.write_all(scheduler_debt_aging_message_line());
         model.write_all(scheduler_edge_blocked_message_line());
         model.write_all(thread_state_terminated_message_line());
         model.write_all(scheduler_edge_terminated_message_line());

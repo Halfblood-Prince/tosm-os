@@ -134,6 +134,10 @@ pub const BOOT_SCHEDULER_CARRYOVER_LINE: &str =
 pub const BOOT_SCHEDULER_DEBT_LINE: &str =
     "tosm-os: scheduler debt task=2 debt=3 repaid=2 starve=4 backoff=1 next=3\r\n";
 
+/// Canonical scheduler debt-aging line emitted after debt decay and repayment-cap reset modeling.
+pub const BOOT_SCHEDULER_DEBT_AGING_LINE: &str =
+    "tosm-os: scheduler debt aging task=2 debt=3 decay=2 cap-reset=1 cap=2 next=3\r\n";
+
 /// Canonical thread-state-terminated line emitted when a worker lifecycle is cleaned up.
 pub const BOOT_THREAD_STATE_TERMINATED_LINE: &str =
     "tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n";
@@ -348,6 +352,12 @@ pub const fn boot_scheduler_carryover_line_bytes() -> &'static [u8] {
 #[must_use]
 pub const fn boot_scheduler_debt_line_bytes() -> &'static [u8] {
     BOOT_SCHEDULER_DEBT_LINE.as_bytes()
+}
+
+/// Returns the canonical scheduler debt-aging line (including CRLF) for serial writers.
+#[must_use]
+pub const fn boot_scheduler_debt_aging_line_bytes() -> &'static [u8] {
+    BOOT_SCHEDULER_DEBT_AGING_LINE.as_bytes()
 }
 
 /// Returns the canonical thread-state-terminated line (including CRLF) for serial writers.
@@ -836,6 +846,18 @@ pub struct EarlySchedulerDebtReport {
     pub next_task_id: u32,
 }
 
+/// Deterministic scheduler debt-aging report for cross-handoff decay/reset contracts.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EarlySchedulerDebtAgingReport {
+    pub selected_task_id: u32,
+    pub selected_debt_before: u8,
+    pub selected_debt_after_decay: u8,
+    pub selected_decay_applied: u8,
+    pub repayment_cap_reset: bool,
+    pub repayment_cap: u8,
+    pub next_task_id: u32,
+}
+
 /// Errors returned by deterministic thread lifecycle transition helpers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EarlyThreadLifecycleError {
@@ -883,6 +905,13 @@ pub enum EarlySchedulerCarryoverError {
 /// Errors returned by deterministic scheduler debt repayment + starvation-backoff modeling helpers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EarlySchedulerDebtError {
+    DuplicateTask,
+    SelectedTaskNotFound,
+}
+
+/// Errors returned by deterministic scheduler debt-aging decay/reset modeling helpers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EarlySchedulerDebtAgingError {
     DuplicateTask,
     SelectedTaskNotFound,
 }
@@ -2329,6 +2358,61 @@ pub fn model_early_scheduler_preemption_debt(
         selected_debt_repaid,
         selected_starvation_score: selected.starvation_score,
         selected_backoff_applied,
+        next_task_id,
+    })
+}
+
+/// Models scheduler debt aging decay across timer handoffs and repayment-cap reset contracts.
+pub fn model_early_scheduler_preemption_debt_aging(
+    slots: [EarlySchedulerDebtSlot; 3],
+    selected_task_id: u32,
+    handoff_count: u8,
+) -> Result<EarlySchedulerDebtAgingReport, EarlySchedulerDebtAgingError> {
+    let [first, second, third] = slots;
+    if first.task_id == second.task_id
+        || first.task_id == third.task_id
+        || second.task_id == third.task_id
+    {
+        return Err(EarlySchedulerDebtAgingError::DuplicateTask);
+    }
+
+    let selected = if first.task_id == selected_task_id {
+        first
+    } else if second.task_id == selected_task_id {
+        second
+    } else if third.task_id == selected_task_id {
+        third
+    } else {
+        return Err(EarlySchedulerDebtAgingError::SelectedTaskNotFound);
+    };
+
+    let selected_decay_applied = selected.preemption_debt.min(handoff_count.min(2));
+    let selected_debt_after_decay = selected
+        .preemption_debt
+        .saturating_sub(selected_decay_applied);
+    let repayment_cap_reset = selected_debt_after_decay <= 1;
+    let repayment_cap = if repayment_cap_reset { 2 } else { 1 };
+
+    let mut next_task_id = selected.task_id;
+    let mut best_starvation_score = selected.starvation_score;
+    for candidate in [first, second, third] {
+        if candidate.task_id != selected.task_id
+            && (candidate.starvation_score > best_starvation_score
+                || (candidate.starvation_score == best_starvation_score
+                    && candidate.task_id < next_task_id))
+        {
+            best_starvation_score = candidate.starvation_score;
+            next_task_id = candidate.task_id;
+        }
+    }
+
+    Ok(EarlySchedulerDebtAgingReport {
+        selected_task_id: selected.task_id,
+        selected_debt_before: selected.preemption_debt,
+        selected_debt_after_decay,
+        selected_decay_applied,
+        repayment_cap_reset,
+        repayment_cap,
         next_task_id,
     })
 }
@@ -4230,6 +4314,106 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_preemption_debt_aging_model_reports_decay_and_cap_reset() {
+        let report = super::model_early_scheduler_preemption_debt_aging(
+            [
+                super::EarlySchedulerDebtSlot {
+                    task_id: 2,
+                    preemption_debt: 3,
+                    starvation_score: 4,
+                    backoff_budget: 1,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 3,
+                    preemption_debt: 0,
+                    starvation_score: 7,
+                    backoff_budget: 0,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 4,
+                    preemption_debt: 1,
+                    starvation_score: 5,
+                    backoff_budget: 1,
+                },
+            ],
+            2,
+            2,
+        )
+        .expect("debt-aging model should report deterministic decay + cap reset");
+
+        assert_eq!(report.selected_task_id, 2);
+        assert_eq!(report.selected_debt_before, 3);
+        assert_eq!(report.selected_debt_after_decay, 1);
+        assert_eq!(report.selected_decay_applied, 2);
+        assert!(report.repayment_cap_reset);
+        assert_eq!(report.repayment_cap, 2);
+        assert_eq!(report.next_task_id, 3);
+    }
+
+    #[test]
+    fn scheduler_preemption_debt_aging_model_rejects_duplicate_and_unknown_selected() {
+        let duplicate = super::model_early_scheduler_preemption_debt_aging(
+            [
+                super::EarlySchedulerDebtSlot {
+                    task_id: 2,
+                    preemption_debt: 3,
+                    starvation_score: 4,
+                    backoff_budget: 1,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 2,
+                    preemption_debt: 0,
+                    starvation_score: 7,
+                    backoff_budget: 0,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 4,
+                    preemption_debt: 1,
+                    starvation_score: 5,
+                    backoff_budget: 1,
+                },
+            ],
+            2,
+            2,
+        )
+        .expect_err("debt-aging model should reject duplicate task ids");
+        assert_eq!(
+            duplicate,
+            super::EarlySchedulerDebtAgingError::DuplicateTask
+        );
+
+        let not_found = super::model_early_scheduler_preemption_debt_aging(
+            [
+                super::EarlySchedulerDebtSlot {
+                    task_id: 2,
+                    preemption_debt: 3,
+                    starvation_score: 4,
+                    backoff_budget: 1,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 3,
+                    preemption_debt: 0,
+                    starvation_score: 7,
+                    backoff_budget: 0,
+                },
+                super::EarlySchedulerDebtSlot {
+                    task_id: 4,
+                    preemption_debt: 1,
+                    starvation_score: 5,
+                    backoff_budget: 1,
+                },
+            ],
+            5,
+            2,
+        )
+        .expect_err("debt-aging model should reject unknown selected task id");
+        assert_eq!(
+            not_found,
+            super::EarlySchedulerDebtAgingError::SelectedTaskNotFound
+        );
+    }
+
+    #[test]
     fn scheduler_preemption_debt_model_rejects_duplicate_and_unknown_selected() {
         let duplicate = super::model_early_scheduler_preemption_debt(
             [
@@ -4344,6 +4528,14 @@ mod tests {
         assert_eq!(
             super::boot_scheduler_debt_line_bytes(),
             b"tosm-os: scheduler debt task=2 debt=3 repaid=2 starve=4 backoff=1 next=3\r\n"
+        );
+        assert_eq!(
+            super::BOOT_SCHEDULER_DEBT_AGING_LINE,
+            "tosm-os: scheduler debt aging task=2 debt=3 decay=2 cap-reset=1 cap=2 next=3\r\n"
+        );
+        assert_eq!(
+            super::boot_scheduler_debt_aging_line_bytes(),
+            b"tosm-os: scheduler debt aging task=2 debt=3 decay=2 cap-reset=1 cap=2 next=3\r\n"
         );
     }
 

@@ -36,6 +36,7 @@ expected_thread_wake_fairness='tosm-os: thread wake fairness first=4 wait=0x5000
 expected_scheduler_rebalance='tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1'
 expected_scheduler_carryover='tosm-os: scheduler carryover task=2 rem=2 carry=1 thresh=3 preempt=0 next=2'
 expected_scheduler_debt='tosm-os: scheduler debt task=2 debt=3 repaid=2 starve=4 backoff=1 next=3'
+expected_scheduler_debt_aging='tosm-os: scheduler debt aging task=2 debt=3 decay=2 cap-reset=1 cap=2 next=3'
 expected_thread_state_terminated='tosm-os: thread state task=2 ready->terminated runq=1 selected=0'
 expected_scheduler_edge_blocked='tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0'
 expected_scheduler_edge_terminated='tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0'
@@ -72,6 +73,7 @@ expected_thread_wake_fairness_line='tosm-os: thread wake fairness first=4 wait=0
 expected_scheduler_rebalance_line='tosm-os: scheduler rebalance winner=2 age=4 decayed=6 floor=4 boost=1\r\n'
 expected_scheduler_carryover_line='tosm-os: scheduler carryover task=2 rem=2 carry=1 thresh=3 preempt=0 next=2\r\n'
 expected_scheduler_debt_line='tosm-os: scheduler debt task=2 debt=3 repaid=2 starve=4 backoff=1 next=3\r\n'
+expected_scheduler_debt_aging_line='tosm-os: scheduler debt aging task=2 debt=3 decay=2 cap-reset=1 cap=2 next=3\r\n'
 expected_thread_state_terminated_line='tosm-os: thread state task=2 ready->terminated runq=1 selected=0\r\n'
 expected_scheduler_edge_blocked_line='tosm-os: scheduler edge case=blocked-selected task=1 runq=2 selected=0\r\n'
 expected_scheduler_edge_terminated_line='tosm-os: scheduler edge case=terminated-dequeue task=2 err=task-not-found runq=1 selected=0\r\n'
@@ -235,6 +237,11 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_scheduler_debt}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected scheduler-debt line not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_debt_aging}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected scheduler-debt-aging line not found"
     exit 1
   fi
 
@@ -425,6 +432,11 @@ contract_check() {
 
   if ! grep --fixed-strings --quiet -- "${expected_scheduler_debt_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
     echo "smoke: expected scheduler-debt CRLF contract not found"
+    exit 1
+  fi
+
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_debt_aging_line}" kernel/src/lib.rs boot/uefi-entry/src/lib.rs; then
+    echo "smoke: expected scheduler-debt-aging CRLF contract not found"
     exit 1
   fi
 
@@ -829,6 +841,11 @@ run_qemu_smoke() {
     exit 1
   fi
 
+  if ! grep --fixed-strings --quiet -- "${expected_scheduler_debt_aging}" "${serial_log}"; then
+    echo "smoke: QEMU serial output missing scheduler-debt-aging line"
+    exit 1
+  fi
+
   if ! grep --fixed-strings --quiet -- "${expected_scheduler_edge_blocked}" "${serial_log}"; then
     echo "smoke: QEMU serial output missing scheduler-edge-blocked line"
     exit 1
@@ -858,7 +875,7 @@ run_qemu_smoke() {
     return 2
   fi
 
-  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, timer-init, timer-first-tick, timer-third-tick, timer-ack, timer-handoff, scheduler-handoff, thread-enqueue, thread-dequeue, thread-ctx-save, thread-ctx-restore, thread-ctx-meta, thread-state-blocked, thread-state-ready, thread-wake, thread-wait-contention, thread-wake-order, thread-wake-fairness, scheduler-carryover, scheduler-edge-blocked, thread-state-terminated, scheduler-edge-terminated, and completion lines"
+  echo "smoke: QEMU boot output includes banner, interrupt-init, exception, memory-init, paging-plan, paging-install, heap-bootstrap, heap-alloc-cycle, global-allocator-ready, global-allocator-probe, timer-init, timer-first-tick, timer-third-tick, timer-ack, timer-handoff, scheduler-handoff, thread-enqueue, thread-dequeue, thread-ctx-save, thread-ctx-restore, thread-ctx-meta, thread-state-blocked, thread-state-ready, thread-wake, thread-wait-contention, thread-wake-order, thread-wake-fairness, scheduler-carryover, scheduler-debt-aging, scheduler-edge-blocked, thread-state-terminated, scheduler-edge-terminated, and completion lines"
 }
 
 contract_check

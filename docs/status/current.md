@@ -15,6 +15,10 @@
 
 ## Progress update
 
+- Completed slice: fixed smoke timeout pressure by moving the new scheduler debt-aging transcript emission earlier in the UEFI boot transcript so CI can validate the new contract before long-tail firmware runtime stalls.
+- Completed slice: modeled scheduler debt aging decay across timer handoffs with deterministic repayment-cap reset contracts and integrated kernel/UEFI/smoke coverage for the new `scheduler debt aging` line.
+- Next slice: model scheduler wait-channel contention aging under repeated timer wake retries and deterministic priority inversion recovery contracts.
+
 - Completed slice: modeled scheduler preemption-debt repayment and deterministic starvation backoff contracts (`debt/repaid/starve/backoff/next`) in the kernel scheduler model.
 - Completed slice: integrated canonical scheduler-debt transcript emission into UEFI boot flow and expanded kernel/UEFI/smoke contract coverage so source/runtime checks enforce the new debt line.
 - Next slice: model scheduler debt aging decay across successive timer handoffs and deterministic repayment-cap reset contracts.
